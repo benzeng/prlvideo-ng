@@ -1,0 +1,418 @@
+# Parallels Tools 12.2.1 视频协议逆向笔记
+
+目标：在现代 Xorg 上重写 prlvideo 驱动（prlvideo-ng），恢复显示加速。
+来源：Ghidra 全量反编译 prlvideo_drv.so + prlmouse_drv.so（465 函数，
+位于 decomp_all/）+ 内核源码 + 实测验证。
+实测状态标记：✅已验证 / 📖反编译确认未实测 / ❓未解
+
+## 三条通信通道
+
+### 1. Toolgate 同步请求（✅）
+`write(fd, &ptr, 8)` 到 `/proc/driver/prl_tg`（主）或 `/proc/driver/prl_vtg`（视频专用），
+fd 用 O_RDWR 打开。视频类请求必须走 prl_vtg。
+
+用户态内存布局（16 字节头 + inline 数据(8字节对齐) + TG_BUFFER 数组）：
+```c
+TG_REQUEST { u32 Request; u32 Status; u16 InlineByteCount; u16 BufferCount; u32 Reserved; }
+TG_BUFFER  { void *buf; u32 ByteCount; u32 Writable:1, Userspace:1, Reserved:30; }  // 16B
+```
+write 同步完成，结果写回 req->Status / inline / buffer。
+内核侧将 BufferCount>0 的用户缓冲 pin 页 DMA（prltg.c build_request）。
+
+### 2. RDPMC 超调用（✅ 已实测打通！）
+`otgMonSideCall(struct u64[6])`：6 寄存器 ABI，需信号保护：
+```
+rax=s[0](magic) rbx=s[1] rcx=s[2] rdx=s[3] rsi=s[4] rdi=s[5]
+rdpmc 指令; 结果写回全部 6 字
+```
+- magic 0x5f9e652 = 探测：宿主应答 rax=0xb36af47, rbx=版本(=2)【✅实测】
+- magic 0x5f9e653 = 打开私有 IO 通道（返回 link id 于 s[1]）【📖】
+- magic 0x5f9e654 = 私有 IO 调用【📖】
+- 见 otgOpen / otgIOBegin / otgRequest / otgPrivateIOCtl（otg 私有传输层，带分块）
+
+### 3. VGA 扩展寄存器（📖）
+`out(0x3c4, 0xa9)` 选页后经 0x3c5 依次写：bpp、宽(u16)、高(u16)、
+stride(u32, 32字节对齐)、0x3c(刷新率60)、1、0 —— 单头模式设定路径（PrlVesaSetScrnMode）。
+内核 probe 用 0x3c4/0xa0 读显存大小（256MB）。
+
+## 已解码的 MM 请求（经通道 1，/proc/driver/prl_vtg）
+
+| 码 | 名称 | 载荷（inline 字节） | 状态 |
+|---|---|---|---|
+| 0x8110 | QUERY_HEADS | 8B 零入 → (maxHeads, activeHeads) | ✅ 返回 (5,1) |
+| 0x8111 | ENABLE_HEAD | {head u32, 0} | ✅ |
+| 0x8112 | DISABLE_HEAD | {head u32, 0} | ✅（黑屏后需重设模式）|
+| 0x8114 | SET_MODE | {head u16, bpp u16, w u16, h u16, stride u32, refresh u32, flags u16=1, pad u16, **fboffset u32(字节)**, x u32, y u32} | ✅字段序已实测锁定 |
+| 0x8117 | SHARE_STATE | 2 缓冲: [0]=16头×{x1,y1,x2,y2}u16 (128B, 哨兵 3fff/3fff/c000/c000), [1]=鼠标坐标 {x,y} u32 (8B)，均可写 | ❗实测 write 挂起——需先完成完整初始化链 |
+
+TG_STATUS: 0=成功 0xf0000002=INVALID_REQUEST 0xf0000003=INVALID_PARAMETER
+0xf0000012=INVALID_HANDLE
+
+## 关键时序：驱动 EnterVT（📖 FUN_0010ae90）
+
+```
+EnterVT:
+  PrlResetVideoMode:
+    PrlSetVideoMode:
+      VBEGetVBEMode（保存当前 VBE 模式）
+      PrlVesaSaveFonts（保存 VGA 字体）
+      PrlVesaSetScrnMode:
+        单头(<2显示器): VGA 扩展寄存器序列（通道3）
+        多头: 每16头循环 SET_MODE（通道1, fboffset/x/y 来自 per-head 布局）
+    若 DynRes 已启用: PrlOtgReqDynResEnable(1)   ← 通道2 超调用!
+  PrlCtlStartShareStates（创建线程循环发 SHARE_STATE 0x8117 + 鼠标坐标）
+  PrlCtlUpdateGLXClipingAll
+```
+DynResEnable 载荷（otgRequest, 16B）: {u32 0xb /*子命令*/, 0, 0, u32 disable?1:0}
+
+## 宿主行为模型（实测推断）
+
+- 宿主不持续扫描 VRAM：SET_MODE 时取一次内容，之后靠 SHARE_STATE 脏区驱动重取
+- fboffset 为字节单位（+4KB 写入被宿主按字节读到，蓝线实验证实）
+- 帧缓冲可放 VRAM 任意偏移（256MB），避开 offset 0 的控制台区
+- DISPLAY 关闭后 VBE 扫描不自动恢复，需重设模式或重启
+
+## 恢复手段（✅ 随时可用）
+
+`tgrestore2 1600 1200`：ENABLE_HEAD(0) + SET_MODE(1600,1200,6400,off 0)。
+当前控制台实况以 /sys/class/graphics/fb0 为准（GRUB 回退到 1600x1200）。
+
+## 测试工具（本目录）
+
+| 工具 | 用途 |
+|---|---|
+| tgprobe | 任意 inline 请求探测 |
+| tgtest/tgtest2/tgtest3 | 管线实验（test3 含 SHARE_STATE——会挂起，勿直接跑）|
+| tgrestore2 | 显示恢复 |
+| hypcall | RDPMC 超调用探针（✅ 可用）|
+| decomp_all/ | 全量反编译 C 代码 |
+| olddrv/ | 原始二进制（含 prlmouse）|
+
+## 下一步（按序）
+
+1. ✅ otg 私有传输层已实现（otg.c/otg.h，probe/open/request 全部 rc=0）
+2. ✅ 初始化链已串联实测：probe→MaxHeads({0xb,5,1})→DynResEnable→VGA模式→渐变
+   —— **0x8117 仍挂起**（内容无关、上下文无关、请求已提交到设备、等待可中断）
+3. **0x8117 门控破解（下次首要任务）**，按优先级假设：
+   - H1: 先发 HWCInit：otgRequest({1,3,...} 0x1C字节)（PrlHWCInit，光标会话=显示会话建立者）
+   - H2: 旧驱动以 O_WRONLY 打开 vtg（flags=1），我们用 O_RDWR——改试
+   - H3: PrlCtlUserSessionsGet 的用户会话关联（host 按 session 键控）
+   - H4: 编译带 printk 的调试版 prl_tg，观察 0x8117 提交后设备级有无任何响应
+4. 打通后：脏区刷新实测 → 写 DDX → 硬件光标 → 动态分辨率 → 验收
+
+## otg 私有通道子命令（已发现）
+
+| 载荷前 4 字节 | 含义 | 出处 |
+|---|---|---|
+| {0xb, 5, maxHeads} | 上报 guest 最大头数 | PrlSendToHostMaxHeadsCount ✅已实测发送成功 |
+| {0xb, 0, 0, disable?} | DynRes 开关 | PrlOtgReqDynResEnable ✅已实测 |
+| {1, 3, ...} 0x1C 字节 | **硬件光标初始化**（响应某字节=支持标志；64x64, flags 0x408）| PrlHWCInit ⭐下次先试 |
+
+## VGA 扩展寄存器精确序列（汇编实测宽度）
+
+```
+outb(0xa9, 0x3c4)        ; 选扩展页
+outb(bpp,   0x3c5)       ; 字节
+outw(width, 0x3c5)       ; 字!
+outw(height,0x3c5)       ; 字
+outw(stride,0x3c5)       ; 字
+outw(60,    0x3c5)       ; 字(刷新率)
+outb(1,     0x3c5)       ; 字节(标志)
+outl(fb_off,0x3c5)       ; 双字! 疑似帧缓冲偏移(旧驱动恒0)
+```
+
+## 0x8117 门控调查结论（内核插桩实测）
+
+调试模块（dbgroot/，5 处 PRLDBG 插桩）追踪结果：
+```
+write req=0x8117 inl=0 buf=2      ← 进入内核
+submit req=0x8117 st=0xffffffff   ← 已 MMIO 提交到设备
+[8 秒无任何完成]                    ← 宿主不清算
+wait done ret=-512(信号)           ← alarm 打断
+irq st=0x1                        ← CANCEL 后宿主立即有响应!
+```
+已排除：请求内容(3种变体)、几何一致性(当前1600x1200直发也挂)、
+HWCInit前置、MaxHeads前置、DynResEnable前置、O_WRONLY打开方式、
+内核pin页路径(其他带缓冲请求秒回)。
+结论：宿主认识该请求（响应CANCEL）但其处理器在等一个未建立的会话状态。
+
+## 王牌方案（下次首选）：原驱动观测
+
+1. 在 chroot/第二X（VT8）装 Debian stretch 时代 Xorg 1.19（ABI 匹配！）
+2. 加载原版 prlvideo_drv.so——它能真正跑起来
+3. 用调试版 prl_tg 内核模块完整记录它与宿主的全部对话
+4. 对比复现 → 缺失的握手自然现形
+
+备选：逆向 prltoolsd/iagent64 的动态请求码（显示服务会话注册嫌疑最大）。
+
+## 调试模块热换装流程（已验证）
+
+stop lightdm/prltoolsd → pkill prl* goa* evolution* → 循环 umount -l psf →
+rmmod prl_fs → rmmod prl_tg → depmod -a → modprobe → 恢复服务。
+最简路径：.ko 放 /lib/modules/.../updates/dkms 后直接重启（开机自动加载，
+PRLDBG 在 boot 流量下即有输出）。
+注意：从 /usr/lib 拷源码要带 Toolgate 目录层级（include 根依赖），
+且必须先删干净旧 .o/.ko 再编（陈旧产物陷阱已踩过两次）。
+
+## 🎉 0x8117 门控已攻破（实测确认）
+
+激活宿主 share-state 消费者的完整条件：
+1. prlcc（X 会话客户端）必须在 X 会话中运行：
+   `env DISPLAY=:0 ... /usr/bin/prlcc &`
+2. prltoolsd 重启/重发能力报告（0x8210, 3984字节）：
+   `systemctl restart prltoolsd`
+3. 之后 0x8117 立即完成（首个返回 0xf0000000=协议状态而非挂起）
+
+根因：当年安装器"跳过X模块"的应答同时跳过了会话客户端安装，
+prltoolsd 上报无X集成 → 宿主永不激活显示消费者。
+
+驱动部署时必须包含：prlcc 自启动（autostart .desktop）+
+prltoolsd 在 X 会话就绪后的重报时机。
+
+下一步（顺序）：GL_VERSION(0x8130,4B inline) → QUERY_HEADS → ENABLE_HEAD
+→ SET_MODE(帧缓冲@VRAM偏移) → SHARE_STATE(脏区) → 屏幕输出 → DDX
+
+## 0x8117 复现调查状态（第二轮）
+
+已排除假设：全屏/窗口模式、prlcc 全家桶+时序(45s)、toolsd重启、
+大报告(0x8210/3984B)完成态、GL_VERSION前置、85秒长等待、纯share与
+模式变更后share、鼠标活动(弱样本)。
+
+唯一成功样本(13:55)的取证特征：重启(13:49)后5分钟、老Xorg完整驱动
+初始化(13:44-47)之后、prlcc+toolsd重启+大报告完成后。
+**待验证主假设**：Mac侧PD应用跨guest重启存活，老驱动的完整初始化
+（VBE+VGA模式+GL_VERSION+share流）打开的宿主显示会话在guest重启后
+仍存活一段时间，sstest骑上了它，之后衰减。
+
+下次实验设计（无需盯屏）：老Xorg跑60s退出后，在 0/3/5/10 分钟
+间隔各发一次sstest，绘制会话存活曲线；若确认，再逐步削减老Xorg的
+初始化步骤找出最小开门序列。
+
+事故记录：显示管线被楔死后全屏切换会导致宿主窗口僵尸化（控制中心
+重启VM恢复）；tgrestore2 1600 1200 是可靠的guest侧恢复手段。
+
+## 大报告(0x8210/3984B)载荷已破解（第三轮）
+
+- 开头: {u32 0x00010005 版本} + 用户会话结构
+- 主体: SSH用户匹配脚本（/bin/bash, host_user=dong, 解析 login.defs 的
+  UID_MIN/MAX + 遍历 /etc/passwd 找常规用户 → /var/lib/parallels-tools/ssh_user）
+- 即"共享配置档"功能的用户侦测数据，非显示状态
+- 工具链已就位: 载荷 dump 插桩(PRL8210) + payload8210.bin/hex 样本
+- 下一步: 对比不同状态下 0x8000 系列请求与全载荷差异；
+  或逆向 prltoolsd 的 tg_services_run 大缓冲填充函数（0x409a09 附近）
+  找"显示服务状态"字段的确切比特位
+
+## prltoolsd 宿主事件分发架构（第三轮成果，地址均在 /usr/bin/prltoolsd）
+
+tg_services_run 循环(0x4099a0): malloc(4000) → 填 {0x8210, Inl=3984,
+ver=0x10005} → write(tg_fd) → 宿主在同一缓冲回写:
+- inline+4 (buf+0x14) = 消息类型
+- inline+0x10 (buf+0x20) = 事件码
+- inline+0x14起 (buf+0x24) = 事件数据
+
+消息类型分发(跳转表@0x40f030):
+- 类型 3/4/5/13 → 事件分发器 0x4082d0
+- 类型 6 → 0x4092d2
+- 类型 15 → 0x40a280 (服务重初始化)
+- 其余 → 忽略续循环
+
+事件分发器 0x4082d0 内层(按 buf+0x20 事件码):
+- 0→0x4086e4→0x405e70(会话, buf+0x38参数)
+- 2→0x408943   3→0x408865   5→0x40884c
+- 6→0x408725→0x405e00(查表, buf+0x24参数, 后续用buf+0xa/+0x40)
+- 7→0x4089fe   8→0x4087cd
+
+下一步: 逆 0x405e00/0x405e70 + 事件2/3/5/7/8 处理器，
+定位"显示会话激活"事件（很可能由宿主在VM窗口状态变化时下发），
+与 0x8117 门控对上即完成最后拼图。
+
+## 第四轮发现
+
+1. **prltoolsd 拥有动态分辨率功能**: -r 选项 "Dynamic resolution update
+   time (ms) [100,1000], default 250" —— 显示管线不只是被动上报,
+   prltoolsd 以 250ms 周期主动参与! 这可能是 0x8117 消费者的心跳方。
+2. **verbose 模式**: prltoolsd -f -v (前台详细日志)。当前被 CUPS 打印
+   同步噪音淹没(lpstat/lpadmin), 需先禁用打印服务或过滤后观测。
+3. 服务注册表用 UUID 标识(16字节名), 注册函数 0x405d50,
+   仅两处调用(0x407ec0 关停路径, 0x408ad5)。
+4. prltoolsd.conf 无服务定义(服务清单运行时构建)。
+
+下次优先级:
+a) 禁用 prltoolsd 打印功能(配置或strace定位) → -v 模式纯净观测
+b) 盯 -r 250ms 周期的动态分辨率流量(载荷插桩可见)
+c) 对照 0x8117 门控开/关两种状态下 prltoolsd 行为差异
+
+## 第五轮补充
+
+- prltoolsd 无符号表(stripped), 函数导航需手动
+- 其超调用层入口: otgMonSideCall=0x40bf50, 私有IO/otgRequest=0x40bf50-0x40c250
+  (与 X 驱动同构)
+- 当前流量基线: 仅 prlshprof 0x8410 每秒1次; prltoolsd 动态分辨率
+  子系统完全静默(无250ms流量) → 它的激活条件未满足
+- 下次: 从 0x40c0c4(私有IO)向上找调用者→dynres发送函数→其激活开关;
+  结合 -v verbose(先研究如何禁打印同步噪音)对照观测
+
+## 第六轮补充
+
+- prltoolsd otg 层: MonSideCall=0x40bf50, otgOpen=0x40b880, otgIOBegin=0x40b850,
+  otgRequest=0x40c160, 主链接打开点=0x403619(main初始化)
+- 另有一辅助 otg 打开(0x40b21b)在某个 dynres 相关函数
+- 时间预算管理: 下次直接从 Ghidra 加载 /usr/bin/prltoolsd 全量反编译
+  (无符号但 Ghidra 会重建函数表, 比在 objdump 里手挖快 10 倍)
+- 原则确认: dynres 的 250ms 心跳在流量基线中不存在 → 激活开关未打开,
+  它才是 0x8117 的消费者本体(大概率通过同 otg 链接向宿主定时要边界)
+
+## 第七轮：prltoolsd 全量反编译（133 函数, decomp_toolsd/）
+
+决定性排除:
+- prltoolsd 完全不引用 /proc/driver/prl_vtg, 不引用 X11 ——
+  dynres 250ms 心跳是**配置监视**(检查宿主窗口 resize)而非 share-state 发送
+- 0x8117 消费者只能是**宿主侧**; 其激活由宿主的显示会话状态机控制
+- prltoolsd otg 层与 X 驱动同构(0x40bf50 MonSideCall 等)
+
+复测取证: prlcc(45s)+toolsd重启(35s) 后 sstest 仍挂 —— 
+13:55 成功窗口的确切激活条件仍是唯一未解之谜。
+自上次成功以来仅做过: /var/log 日志清理等维护。 
+→ 下次: 检查 Mac 侧 Parallels 设置变化 (显示选项/分辨率模式) 或
+以另一台 X server 干净启动为触发 (X server 启动=宿主会话建立的经典扳机)。
+
+## 🎊 终极破解：0x8117 门控 + SET_MODE 兼容性（第八轮）
+
+门控钥匙: **老驱动完整生命周期打开的宿主显示会话**（Xorg1.19+prlvideo 跑过即可，
+任意后启动的 X 会话亦可续命）——此前的 prlcc/toolsd 序列并非必需，
+关键是原版驱动执行过 GL_VERSION+VBE+VGA+VT Enter+ShareStates 线程的全流程。
+
+**share_state 与模式设定的兼容性矩阵（实测）**:
+- 纯 share（不碰模式）→ 完成
+- MM SET_MODE(0x8114) → 挂（MM 注册模式挤掉 share 消费者）
+- VBE 模式(0x4fxx, 老驱动路径) → **完成**（宿主驱动兼容模式）
+
+→ 驱动设计定型: 模式设定走 VBE int10 (0x4f02) 或 VGA 扩展寄存器,
+   帧缓冲可放 VRAM 任意偏移, share 用 0x8117 上报脏区, 光标用
+   MOUSE_SET_POINTER(0x8100)。MM 多头协议仅用于多显示器场景。
+
+## 🏆 终极验证成功（第九轮）：用户亲证渐变上屏
+
+老 Xorg 保活(keeper) + vbetest 完整链:
+GL_VERSION(0x0) → VGA扩展寄存器(1280x800, fb_off=16MB) →
+渐变写入VRAM → SHARE_STATE 五连发(全部 0xf0000000) →
+用户确认: 彩色渐变画面显示 12 秒 → 恢复 Xfce。
+
+**0x8117 会话模型（最终结论）**:
+宿主显示消费者仅在“老驱动完整生命周期初始化过”的会话窗口内激活
+(该窗口跨进程持久, keeper Xorg 保活期间我们的独立请求全部成功);
+模式设定兼容 VBE/VGA路径, MM SET_MODE 会挤掉消费者。
+GL_VERSION→VGA模式→VRAM直写→SHARE_STATE 四件套全部实测通过。
+
+下一步: prlvideo-ng DDX (Xorg 22 ABI):
+- ScreenInit: GL_VERSION + VGA扩展序列(VBE兼容) + VRAM mmap
+- 模式设定: VGA 扩展序列 (支持动态分辨率)
+- 帧缓冲: VRAM 任意偏移 (避开 offset 0 控制台)
+- 每帧: Damage 回调 → SHARE_STATE(边界)
+- 光标: MOUSE_SET_POINTER + 位置随 SHARE_STATE 的 buffer1 上报
+
+## DDX 开发进展（第十轮）：prlvideo-ng 骨架
+
+已实现并验证（/home/dong/prlvideo-ng/prlvideo.c + Makefile）:
+- Xorg 22 platform/PCI 驱动模型 (supported_devices + PciProbe + driverFunc HW_IO|MMIO)
+- PCI 设备绑定 (1ab8:4005, xf86ConfigPciEntity)
+- GL_VERSION 握手在真实 Xorg 执行成功
+- 完整 PreInit: 模式链表/几何/DPI/depth/visual/标准调用序列
+- fbScreenInit OK (用 shadow_mem 而非 VRAM+offset——16MB 偏移的 VRAM 直接
+  传给 fbScreenInit 会挂; 需换低偏移或先 touch)
+- ScreenInit 完成 (visual/fbPictureInit)
+
+卡点 (下次): ScreenInit 后 segfault @0xd0 — Xorg 后续阶段访问 NULL 指针,
+疑似 colormap/AdjustFrame/ValidMode 或 pixmap private 未设。
+参考: fbdev.c 的完整 colormap + ValidMode 流程。
+
+发现的坑:
+- Xorg VGA arbiter 禁止直接 iopl 端口写 → 模式切换要走 Xorg 的 VGA 服务
+  或 vesafb 已在目标模式时跳过
+- DamageRegister 在 ScreenInit 阶段 drawable 未 ready → 移到 EnterVT
+- fbScreenInit 需要 DPI 非零, 几何在 PreInit 用 xf86SetCrtcForModes 标准序列
+
+## DDX 进展（第十一轮）：启动收尾诊断
+
+进展:
+- colormap 默认路径 (fbScreenInit 内建) 采用, xf86HandleColormaps 移除
+- ScreenInit 完整执行到 "ScreenInit complete" + colormap OK
+- 现在崩在 InitOutput (gdb 确认, 无符号) — 非 colormap/ScreenInit,
+  是 Xorg 输出初始化深坑 (segfault @0xd0)
+
+诊断路径 (下次):
+- 需 xserver-xorg-core-dbg 调试符号包 才能定位 InitOutput 具体行
+- 或直接比对新版 xf86-video-fbdev 源码 (git clone xorg/driver/xf86-video-fbdev)
+  其完整 PreInit/ScreenInit/colormap 序列作为权威模板重构
+- 备选: 移除 supported_devices/PciProbe 改用 fbdevHWProbe 式 /dev/fb0 路径
+  (我们驱动本质也是 framebuffer 直写, fbdev 模型更契合)
+
+当前代码: prlvideo.c (已含全部调试输出 + 可开关的 VGA/Damage/VRAM 实验路径)
+
+## 🏆 DDX 完整点亮（第十二轮）：prlvideo-ng 正式运行
+
+崩溃根因链(逆向 Xorg 1.21 源码定位):
+- InitOutput+0x2f4 segfault@0xd0 = AddScreen 后解引用 pScrn->monitor->DDC
+  (我们的直接 claim 路径没建 monitor 记录)
+- 修复: PreInit 分配 MonRec (id="Parallels Virtual Monitor", DDC=NULL)
+
+点亮确认:
+- Xorg :9 (VT9) 完整启动: 全部扩展(GLX DRISWRAST/DRI2/DRI3)初始化
+- xdpyinfo: 1600x1200, depths 1/4/8/15/16/24/32 完整
+- 主显示 lightdm/Xorg :0 亦用 prlvideo-ng (log 确认 PciProbe→GL_VERSION→
+  fbScreenInit→colormap 全链, 用户亲证桌面可显示)
+- fbdev 对齐收尾序列: SetBlackWhitePixels/BackingStore/miDCInitialize/
+  miCreateDefColormap/HandleColormaps(CMAP_PALETTED_TRUECOLOR)
+
+剩余 (下次):
+- Damage→SHARE_STATE 脏区上报 (EnterVT 注册 + BlockHandler 周期 flush)
+- 动态分辨率: 宿主 resize 检测 → VGA 扩展序列重设模式
+- VRAM 直写帧缓冲 (当前 shadow_mem 拷贝路径, 换 VRAM+fb_offset 直接映射)
+- 硬件光标 (MOUSE_SET_POINTER 0x8100)
+
+## DDX 运行期崩溃诊断（第十三轮）
+
+现象: 登录进桌面后打开 terminal → X 服务器崩溃重启回登录框 (浏览器正常)。
+取证: /var/log/Xorg.0.log.old 结尾 segfault, 崩在输入设备初始化后的
+渲染调用, 地址 ~0x356 小偏移 = 空函数指针调用。
+诊断: prlvideo ScreenInit 缺 fb 渲染 wrap hooks
+(pScreen->Composite / CopyArea / EnableDisableFBAccess / miInitializeWrapped
+ScreenFunctions 等), xfwm4 为 terminal 创建装饰+持续重绘时踩到 NULL。
+修复方向(下次):
+- 对照 /tmp/xserver-xorg-video-fbdev-0.5.0/src/fbdev.c 的
+  FbDevSetupScreen + shadowSetup + Composite/CopyArea wrap 序列补齐
+- 或先用 fbSetupWrapProcs 全套标准 wrap (fb.h)
+- Xorg 崩溃后 coredumpctl 无记录 (greeter 提前接管), 现场在 Xorg.0.log.old
+临时规避: /etc/X11/xorg.conf.d/10-parallels.conf 可把 Driver 改回 fbdev
+(vesafb 直写显存同样可见, 只是无协议加速)
+
+## 🎆 第十轮（2026-10-07 深夜）：三大特性落地 prlvideo-ng
+
+**通道真相（修正此前所有门控模型）**：
+- 0x8100/0x8101（光标）：不受任何门控，独立通道，随手可用
+- 0x8117（share-state）：门控 = keeper（老驱动生命周期）**进程存活**，
+  keeper 一退立即关闭（survival.log 曲线证实）；systemd 常驻即解决
+- 之前"探针完成"的假象 = 驱动忽略了 write 的快速失败（EFAULT 等），
+  已改为记录 wrc/errno
+
+**keeper 生产化（/etc/systemd/system/prl-keeper.service）**：
+- Xorg 1.19 + prlvideo 于 vt8 常驻，Restart=always，Before=display-manager
+- 坑1：Xorg 1.19 不理会 -configdir，仍解析 /usr/share/X11/xorg.conf.d，
+  其中 10-quirks.conf 和 10-amdgpu.conf 会让其解析器崩溃（已永久移到
+  /root/disabled-xorg-conf/，本机无 AMD/触摸板，无副作用）
+- 坑2：keeper 的 Modes 必须与主显示对齐（1920x1200），否则模式切换
+  会把扫描输出弄歪
+- 验证：unlock 工具三连发 GL=0x0 / HIDE=0x0 / SHARE=0xf0000000
+
+**prlvideo-ng 新架构**：
+- 发送线程（pthread）：一切 0x8117/0x8100/0x8101 写入都在线程上，
+  主线程只投递（通道关闭时 write 永久挂起，只损失一个线程）
+- 探针先 HIDE 再 SHARE；探测结果经 wakeup handler 回主线程打印
+  （xf86Msg 非线程安全——线程内调用 = 8 秒后随机 SIGSEGV，血泪教训）
+- Damage 注册必须挂 CreateScreenResources（ScreenInit 阶段
+  GetScreenPixmap 为 NULL——第十轮"注册即崩"之谜的真相）
+- xf86InitCursor 前必须先 miDCInitialize（它 wrap mi 的 sprite funcs）
+- CloseScreen 链：我们的 wrap 必须在 DamageSetup 之后挂，否则
+  DamageDestroy 在 damage 层 CloseScreen 内部被二次调用 → SIGSEGV@0x80
+- RegisterBlockAndWakeupHandlers 两个 handler 都不能传 NULL
+- VT 钩子（Enter/LeaveVT）必填，chvt 切走即 NULL 调用

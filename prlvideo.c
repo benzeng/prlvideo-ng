@@ -23,26 +23,74 @@
 #include "shadow.h"
 #include "shadowfb.h"
 #include "damage.h"
+#include "xf86Cursor.h"
+#include "cursorstr.h"
+#include "randrstr.h"
+#include <pthread.h>
 #include <sys/io.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 
 #define PRL_VTG_PATH "/proc/driver/prl_vtg"
 
+/* toolgate request/buffer wire format (verified against prl_tg kernel module) */
+typedef struct {
+    unsigned Request, Status;
+    unsigned short InlineByteCount, BufferCount;
+    unsigned Reserved;
+} __attribute__((aligned(8))) TgRequest;
+
+typedef struct {
+    union { void *Buffer; unsigned long long Va; } u;
+    unsigned ByteCount;
+    unsigned Writable : 1, Userspace : 1, Reserved : 30;
+} __attribute__((aligned(8))) TgBuffer;
+
+/*
+ * Host channel notes (protocol verified 2026-10-06):
+ *  - 0x8117 SHARE_STATE and 0x8100/0x8101 cursor requests HANG the writing
+ *    thread whenever the host display consumer is not active (opened by a
+ *    full original-driver lifecycle; kept alive by the prl-keeper service).
+ *    Therefore ALL vtg writes after PreInit happen on a helper thread; a
+ *    stuck write costs nothing but that thread.
+ *  - 0x8114 MM SET_MODE displaces the share consumer (never use it);
+ *    mode changes go through the VGA extended sequencer registers.
+ */
 typedef struct {
     int vtg_fd;           /* /proc/driver/prl_vtg (protocol channel) */
     int vtg_mmap_fd;      /* same device for VRAM mmap */
     unsigned char *vram;  /* mapped VRAM base (256MB) */
     size_t vram_len;
     unsigned fb_offset;   /* frame buffer byte offset in VRAM */
-    void *shadow_mem;     /* TEMP: plain memory fallback for fbScreenInit */
+
+    /* share-state + cursor sender thread (all vtg writes live here) */
+    pthread_t share_thread;
+    Bool thread_run;
+    Bool thread_started;
+    pthread_mutex_t lock;      /* protects everything below */
+    RegionRec pending_dirty;   /* main thread accumulates, sender flushes */
+    Bool dirty_pending;
+    Bool mouse_changed;
+    unsigned mouse_x, mouse_y; /* cursor position for share-state buffer1 */
+    int mbx_cmd;               /* 0 none, 1 show, 2 hide */
+    unsigned char cursor_plane[6 + 64 * 64 * 4]; /* host cursor image */
+
+    /* channel availability, set by the sender thread's probes */
+    Bool share_ok;             /* 0x8117 completes */
+    Bool cursor_ok;            /* 0x8101 completes */
+    char probe_note[160];      /* thread logs via wakeup handler (xf86Msg
+                                * is not thread-safe) */
+    volatile Bool probe_note_pending;
+    ssize_t last_write_rc;
+    int last_write_errno;
+
     DamagePtr damage;
-    RegionRec damage_region;   /* accumulated dirty region */
-    Bool damage_pending;
+    xf86CursorInfoPtr cursor_info;
+    CreateScreenResourcesProcPtr CreateScreenResources;
     CloseScreenProcPtr CloseScreen;
-    ScreenBlockHandlerProcPtr BlockHandler;
 } PrlRec, *PrlPtr;
 
 static const OptionInfoRec *PrlAvailableOptions(int chipid, int busid);
@@ -50,9 +98,11 @@ static void PrlIdentify(int flags);
 static Bool PrlProbe(DriverPtr drv, int flags);
 static Bool PrlPreInit(ScrnInfoPtr pScrn, int flags);
 static Bool PrlScreenInit(ScreenPtr pScreen, int argc, char **argv);
-static Bool PrlCloseScreen(ScreenPtr pScreen, int argc, char **argv);
+static Bool PrlCloseScreen(ScreenPtr pScreen);
 static void PrlFreeScreen(ScrnInfoPtr pScrn);
 static Bool PrlSwitchMode(ScrnInfoPtr pScrn, DisplayModePtr mode);
+static Bool PrlEnterVT(ScrnInfoPtr pScrn);
+static void PrlLeaveVT(ScrnInfoPtr pScrn);
 static void PrlAdjustFrame(ScrnInfoPtr pScrn, int x, int y);
 static Bool PrlDriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, void *data);
 static Bool PrlPciProbe(DriverPtr drv, int entity_num,
@@ -189,8 +239,8 @@ PrlPlatformProbe(DriverPtr drv, int entity_num, int flags,
     pScrn->ScreenInit = PrlScreenInit;
     pScrn->SwitchMode = PrlSwitchMode;
     pScrn->AdjustFrame = PrlAdjustFrame;
-    pScrn->EnterVT = 0;
-    pScrn->LeaveVT = 0;
+    pScrn->EnterVT = PrlEnterVT;
+    pScrn->LeaveVT = PrlLeaveVT;
     pScrn->FreeScreen = PrlFreeScreen;
     pScrn->ValidMode = 0;
     pScrn->progClock = TRUE;
@@ -230,8 +280,8 @@ PrlPciProbe(DriverPtr drv, int entity_num,
     pScrn->ScreenInit = PrlScreenInit;
     pScrn->SwitchMode = PrlSwitchMode;
     pScrn->AdjustFrame = PrlAdjustFrame;
-    pScrn->EnterVT = 0;
-    pScrn->LeaveVT = 0;
+    pScrn->EnterVT = PrlEnterVT;
+    pScrn->LeaveVT = PrlLeaveVT;
     pScrn->FreeScreen = PrlFreeScreen;
     pScrn->ValidMode = 0;
     pScrn->progClock = TRUE;
@@ -288,8 +338,8 @@ PrlProbe(DriverPtr drv, int flags)
     pScrn->ScreenInit = PrlScreenInit;
     pScrn->SwitchMode = PrlSwitchMode;
     pScrn->AdjustFrame = PrlAdjustFrame;
-    pScrn->EnterVT = 0;
-    pScrn->LeaveVT = 0;
+    pScrn->EnterVT = PrlEnterVT;
+    pScrn->LeaveVT = PrlLeaveVT;
     pScrn->FreeScreen = PrlFreeScreen;
     pScrn->ValidMode = 0;
     pScrn->progClock = TRUE;
@@ -311,20 +361,6 @@ prl_load_palette(ScrnInfoPtr pScrn, int numColors, int *indices, LOCO *colors,
 {
     (void)pScrn; (void)numColors; (void)indices; (void)colors; (void)pVisual;
 }
-
-#pragma pack(push, 1)
-typedef struct {
-    unsigned Request, Status;
-    unsigned short InlineByteCount, BufferCount;
-    unsigned Reserved;
-} TgRequest;
-
-typedef struct {
-    union { void *Buffer; unsigned long long Va; } u;
-    unsigned ByteCount;
-    unsigned Writable:1, Userspace:1, Reserved:30;
-} TgBuffer;
-#pragma pack(pop)
 
 static int
 tg_sync(int fd, unsigned code, void *inl, unsigned inl_len)
@@ -381,6 +417,7 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
     pPrl = calloc(1, sizeof(PrlRec));
     if (!pPrl) return FALSE;
     pScrn->driverPrivate = pPrl;
+    pthread_mutex_init(&pPrl->lock, NULL);
 
     pPrl->vtg_fd = open(PRL_VTG_PATH, O_WRONLY);
     pPrl->vtg_mmap_fd = open(PRL_VTG_PATH, O_RDWR);
@@ -508,15 +545,20 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
     return TRUE;
 }
 
-/* Damage callback → SHARE_STATE(0x8117) with per-head bounds */
+/* ---- share-state / cursor sender thread -------------------------------
+ * All 0x8117 / 0x8100 / 0x8101 writes happen here.  When the host display
+ * consumer is inactive these writes block indefinitely (verified), so the
+ * main thread never touches them; worst case is one parked thread.
+ * Message shapes are ported from the decompiled original driver. */
+
 static void
-prl_damage_report(ScreenPtr pScreen)
+prl_send_share_state(PrlPtr pPrl, unsigned short x1, unsigned short y1,
+                     unsigned short x2, unsigned short y2,
+                     unsigned mx, unsigned my)
 {
-    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-    PrlPtr pPrl = pScrn->driverPrivate;
-    static unsigned short bounds[16][4];
-    static unsigned mouse_xy[2];
-    unsigned char msg[192] __attribute__((aligned(8)));
+    unsigned short bounds[16][4];
+    unsigned mouse_xy[2];
+    unsigned char msg[64] __attribute__((aligned(8)));
     TgRequest *req = (TgRequest *)msg;
     TgBuffer *buf;
     int i;
@@ -525,9 +567,9 @@ prl_damage_report(ScreenPtr pScreen)
         bounds[i][0] = 0x3fff; bounds[i][1] = 0x3fff;
         bounds[i][2] = 0xc000; bounds[i][3] = 0xc000;
     }
-    bounds[0][0] = 0; bounds[0][1] = 0;
-    bounds[0][2] = pScrn->frameX1 + 1;
-    bounds[0][3] = pScrn->frameY1 + 1;
+    bounds[0][0] = x1; bounds[0][1] = y1;
+    bounds[0][2] = x2; bounds[0][3] = y2;
+    mouse_xy[0] = mx; mouse_xy[1] = my;
 
     memset(msg, 0, sizeof(msg));
     req->Request = 0x8117;
@@ -538,44 +580,155 @@ prl_damage_report(ScreenPtr pScreen)
     buf[1].u.Buffer = mouse_xy; buf[1].ByteCount = 8; buf[1].Writable = 1;
     {
         void *p = msg;
-        ssize_t n = write(pPrl->vtg_fd, &p, sizeof(p));
-        (void)n;
+        pPrl->last_write_rc = write(pPrl->vtg_fd, &p, sizeof(p));
+        if (pPrl->last_write_rc < 0)
+            pPrl->last_write_errno = errno;
     }
 }
 
+/* MOUSE_SET_POINTER show: 0x8100, 28-byte inline {x,y,hsx,hsy,w,h,stride}
+ * plus the ARGB plane buffer (6-byte header + pixels). */
 static void
-prl_shadow_refresh(ScrnInfoPtr pScrn, int num, BoxPtr boxes)
+prl_send_cursor_show(PrlPtr pPrl, const unsigned char *plane)
 {
-    PrlPtr pPrl = pScrn->driverPrivate;
+    unsigned char msg[64] __attribute__((aligned(8)));
+    TgRequest *req = (TgRequest *)msg;
+    TgBuffer *buf;
+    unsigned *inl;
 
-    (void)num; (void)boxes;
-    if (pPrl->damage)
-        prl_damage_report(xf86ScrnToScreen(pScrn));
+    memset(msg, 0, sizeof(msg));
+    req->Request = 0x8100;
+    req->Status = 0xffffffff;
+    req->InlineByteCount = 0x1c;
+    req->BufferCount = 1;
+    inl = (unsigned *)(msg + sizeof(TgRequest));
+    inl[0] = pPrl->mouse_x;                 /* raw position */
+    inl[1] = pPrl->mouse_y;
+    inl[2] = plane[4];                      /* hotspot x */
+    inl[3] = plane[5];                      /* hotspot y */
+    inl[4] = plane[2];                      /* width */
+    inl[5] = plane[3];                      /* height */
+    inl[6] = plane[1];                      /* stride in bytes */
+    buf = (TgBuffer *)(msg + sizeof(TgRequest) + 28);
+    buf[0].u.Buffer = (void *)(plane + 6);
+    buf[0].ByteCount = plane[1] * plane[3];
+    {
+        void *p = msg;
+        pPrl->last_write_rc = write(pPrl->vtg_fd, &p, sizeof(p));
+        if (pPrl->last_write_rc < 0)
+            pPrl->last_write_errno = errno;
+    }
 }
 
-/* BlockHandler: periodic share-state flush of accumulated damage region */
+static int
+prl_send_cursor_hide(PrlPtr pPrl)
+{
+    unsigned char msg[16] __attribute__((aligned(8)));
+    TgRequest *req = (TgRequest *)msg;
+    void *p = msg;
+
+    memset(msg, 0, sizeof(msg));
+    req->Request = 0x8101;
+    req->Status = 0xffffffff;
+    pPrl->last_write_rc = write(pPrl->vtg_fd, &p, sizeof(p));
+    if (pPrl->last_write_rc < 0) {
+        pPrl->last_write_errno = errno;
+        return -1;
+    }
+    return (int)req->Status;
+}
+
+/* Probe whether a request completes at all (before the host consumer
+ * gate opens it just parks).  Runs on the sender thread — no xf86Msg
+ * here, it is not thread-safe; the note is printed by the wakeup handler. */
 static void
-prl_block_handler(ScreenPtr pScreen, void *pTimeout)
+prl_thread_probe(PrlPtr pPrl)
 {
-    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-    PrlPtr pPrl = pScrn->driverPrivate;
-    ScreenBlockHandlerProcPtr next;
+    int st = prl_send_cursor_hide(pPrl);
 
-    if (pPrl->damage_pending) {
-        prl_damage_report(pScreen);
-        pPrl->damage_pending = FALSE;
-        RegionEmpty(&pPrl->damage_region);
-    }
-    /* unwrap, call the previous handler, then re-wrap */
-    next = pPrl->BlockHandler;
-    if (next) {
-        pScreen->BlockHandler = next;
-        (*next)(pScreen, pTimeout);
-    }
-    pScreen->BlockHandler = prl_block_handler;
+    pPrl->cursor_ok = TRUE;      /* the write returned at all */
+    prl_send_share_state(pPrl, 0x3fff, 0x3fff, 0xc000, 0xc000,
+                         pPrl->mouse_x, pPrl->mouse_y);
+    pPrl->share_ok = TRUE;
+    snprintf(pPrl->probe_note, sizeof(pPrl->probe_note),
+             "probes done: hide st=0x%x share wrc=%zd errno=%d(%s)\n",
+             st, pPrl->last_write_rc, pPrl->last_write_errno,
+             strerror(pPrl->last_write_errno));
+    pPrl->probe_note_pending = TRUE;
 }
 
-/* Damage region accumulation callback (DamageRegister reportProc) */
+static void *
+prl_share_thread(void *arg)
+{
+    PrlPtr pPrl = arg;
+    sigset_t set;
+    RegionRec dirty;
+    BoxRec box;
+    unsigned char plane[6 + 64 * 64 * 4];
+    unsigned mx, my, hsx = 0, hsy = 0;
+    int mbx;
+    Bool flush, mouse;
+    int beats = 0;
+
+    sigfillset(&set);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
+    prl_thread_probe(pPrl);
+
+    RegionInit(&dirty, (BoxPtr)NULL, 0);
+    while (pPrl->thread_run) {
+        usleep(15000);
+
+        flush = FALSE; mouse = FALSE; mbx = 0;
+        pthread_mutex_lock(&pPrl->lock);
+        if (pPrl->dirty_pending) {
+            RegionUnion(&dirty, &dirty, &pPrl->pending_dirty);
+            RegionEmpty(&pPrl->pending_dirty);
+            pPrl->dirty_pending = FALSE;
+            flush = TRUE;
+        }
+        mx = pPrl->mouse_x; my = pPrl->mouse_y;
+        if (pPrl->mouse_changed) {
+            pPrl->mouse_changed = FALSE;
+            mouse = TRUE;
+        }
+        if (pPrl->mbx_cmd) {
+            mbx = pPrl->mbx_cmd;
+            pPrl->mbx_cmd = 0;
+            memcpy(plane, pPrl->cursor_plane, sizeof(plane));
+            hsx = plane[4]; hsy = plane[5];
+        }
+        pthread_mutex_unlock(&pPrl->lock);
+
+        /* heartbeat keeps the host consumer warm even when idle */
+        if (++beats >= 66) {          /* ~1s at 15ms cadence */
+            beats = 0;
+            flush = TRUE;
+        }
+
+        if (flush || mouse) {
+            if (!RegionNil(&dirty))
+                box = *RegionExtents(&dirty);
+            else {
+                box.x1 = box.y1 = 0;
+                box.x2 = 0xffff; box.y2 = 0xffff;
+            }
+            prl_send_share_state(pPrl, box.x1, box.y1,
+                                 box.x2 + 1, box.y2 + 1,
+                                 mx + hsx, my + hsy);
+            RegionEmpty(&dirty);
+        }
+
+        if (mbx == 1)
+            prl_send_cursor_show(pPrl, plane);
+        else if (mbx == 2)
+            prl_send_cursor_hide(pPrl);
+    }
+    RegionUninit(&dirty);
+    return NULL;
+}
+
+/* Damage callback: accumulate dirty rectangles, sender thread flushes. */
 static void
 prl_damage_callback(DamagePtr pDamage, RegionPtr pRegion, void *closure)
 {
@@ -584,8 +737,241 @@ prl_damage_callback(DamagePtr pDamage, RegionPtr pRegion, void *closure)
     PrlPtr pPrl = pScrn->driverPrivate;
 
     (void)pDamage;
-    RegionUnion(&pPrl->damage_region, &pPrl->damage_region, pRegion);
-    pPrl->damage_pending = TRUE;
+    pthread_mutex_lock(&pPrl->lock);
+    RegionUnion(&pPrl->pending_dirty, &pPrl->pending_dirty, pRegion);
+    pPrl->dirty_pending = TRUE;
+    pthread_mutex_unlock(&pPrl->lock);
+}
+
+/* ---- hardware cursor (MOUSE_SET_POINTER 0x8100/0x8101) ---------------
+ * Host plane format: [0]=type(1 mono-conv,0x20 ARGB) [1]=stride bytes
+ * [2]=width [3]=height [4]=hotspot x [5]=hotspot y, pixels at +6 ARGB. */
+
+static Bool
+prl_use_hw_cursor(ScreenPtr pScreen, CursorPtr pCurs)
+{
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    PrlPtr pPrl = pScrn->driverPrivate;
+
+    return pPrl->cursor_ok &&
+        pCurs->bits->width <= 64 && pCurs->bits->height <= 64;
+}
+
+static Bool
+prl_use_hw_cursor_argb(ScreenPtr pScreen, CursorPtr pCurs)
+{
+    return prl_use_hw_cursor(pScreen, pCurs);
+}
+
+static void
+prl_load_cursor_argb(ScrnInfoPtr pScrn, CursorPtr pCurs)
+{
+    PrlPtr pPrl = pScrn->driverPrivate;
+    unsigned w = pCurs->bits->width, h = pCurs->bits->height;
+
+    pthread_mutex_lock(&pPrl->lock);
+    pPrl->cursor_plane[0] = 0x20;
+    pPrl->cursor_plane[1] = w << 2;
+    pPrl->cursor_plane[2] = w;
+    pPrl->cursor_plane[3] = h;
+    pPrl->cursor_plane[4] = pCurs->bits->xhot;
+    pPrl->cursor_plane[5] = pCurs->bits->yhot;
+    memcpy(pPrl->cursor_plane + 6, pCurs->bits->argb, w * h * 4);
+    pthread_mutex_unlock(&pPrl->lock);
+}
+
+/* Mono cursors: bits are source block then mask block, each row padded to
+ * the 64px MaxWidth (8 bytes/row), 64 rows; bit x of byte is pixel x. */
+static void
+prl_load_cursor_image(ScrnInfoPtr pScrn, unsigned char *bits)
+{
+    PrlPtr pPrl = pScrn->driverPrivate;
+    unsigned *px;
+    int x, y;
+
+    pthread_mutex_lock(&pPrl->lock);
+    pPrl->cursor_plane[0] = 1;
+    pPrl->cursor_plane[1] = 64 << 2;
+    pPrl->cursor_plane[2] = 64;
+    pPrl->cursor_plane[3] = 64;
+    pPrl->cursor_plane[4] = 0;   /* hotspot kept from last ARGB load */
+    pPrl->cursor_plane[5] = 0;
+    px = (unsigned *)(pPrl->cursor_plane + 6);
+    for (y = 0; y < 64; y++) {
+        for (x = 0; x < 64; x++) {
+            unsigned src = (bits[y * 8 + (x >> 3)] >> (x & 7)) & 1;
+            unsigned msk =
+                (bits[512 + y * 8 + (x >> 3)] >> (x & 7)) & 1;
+            *px++ = (src && msk) ? 0xffffffff :    /* fg */
+                    (msk) ? 0xff000000 :           /* bg */
+                    0x00000000;                    /* transparent */
+        }
+    }
+    pthread_mutex_unlock(&pPrl->lock);
+}
+
+static void
+prl_show_cursor(ScrnInfoPtr pScrn)
+{
+    PrlPtr pPrl = pScrn->driverPrivate;
+
+    pthread_mutex_lock(&pPrl->lock);
+    pPrl->mbx_cmd = 1;
+    pthread_mutex_unlock(&pPrl->lock);
+}
+
+static void
+prl_hide_cursor(ScrnInfoPtr pScrn)
+{
+    PrlPtr pPrl = pScrn->driverPrivate;
+
+    pthread_mutex_lock(&pPrl->lock);
+    pPrl->mbx_cmd = 2;
+    pthread_mutex_unlock(&pPrl->lock);
+}
+
+static void
+prl_set_cursor_position(ScrnInfoPtr pScrn, int x, int y)
+{
+    PrlPtr pPrl = pScrn->driverPrivate;
+
+    pthread_mutex_lock(&pPrl->lock);
+    pPrl->mouse_x = x;
+    pPrl->mouse_y = y;
+    pPrl->mouse_changed = TRUE;
+    pthread_mutex_unlock(&pPrl->lock);
+}
+
+static void
+prl_set_cursor_colors(ScrnInfoPtr pScrn, int bg, int fg)
+{
+    /* mono conversion bakes fixed black/white; nothing to do */
+    (void)pScrn; (void)bg; (void)fg;
+}
+
+/* main-thread logger for notes produced by the sender thread; both
+ * handlers must be non-NULL — dix calls them unconditionally */
+static void
+prl_block_noop(void *data, void *pTimeout)
+{
+    (void)data; (void)pTimeout;
+}
+
+static void
+prl_wakeup_handler(void *data, int result)
+{
+    ScreenPtr pScreen = (ScreenPtr)data;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    PrlPtr pPrl = pScrn->driverPrivate;
+
+    (void)result;
+    if (pPrl && pPrl->probe_note_pending) {
+        pPrl->probe_note_pending = FALSE;
+        xf86Msg(X_INFO, PRL_NAME ": %s", pPrl->probe_note);
+    }
+}
+
+/* CreateScreenResources wrapper: the screen pixmap only exists after fb's
+ * implementation runs, so Damage registration must happen here (during
+ * ScreenInit GetScreenPixmap is still NULL — that fault cost a whole day
+ * in an earlier round). */
+static Bool
+prl_create_screen_resources(ScreenPtr pScreen)
+{
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    PrlPtr pPrl = pScrn->driverPrivate;
+    Bool ok;
+
+    pScreen->CreateScreenResources = pPrl->CreateScreenResources;
+    ok = (*pScreen->CreateScreenResources) (pScreen);
+    pScreen->CreateScreenResources = prl_create_screen_resources;
+
+    if (!ok)
+        return FALSE;
+
+    if (DamageSetup(pScreen)) {
+        pPrl->damage = DamageCreate(prl_damage_callback, NULL,
+                                    DamageReportNonEmpty,
+                                    FALSE, pScreen, pScreen);
+        if (pPrl->damage) {
+            DamageRegister(&pScreen->GetScreenPixmap(pScreen)->drawable,
+                           pPrl->damage);
+            DamageSetReportAfterOp(pPrl->damage, TRUE);
+            xf86Msg(X_INFO, PRL_NAME ": Damage registered\n");
+        } else {
+            xf86Msg(X_WARNING, PRL_NAME ": DamageCreate failed\n");
+        }
+        /* wrap AFTER DamageSetup so our teardown runs before the damage
+         * layer's own CloseScreen handler */
+        pPrl->CloseScreen = pScreen->CloseScreen;
+        pScreen->CloseScreen = PrlCloseScreen;
+    } else {
+        xf86Msg(X_WARNING, PRL_NAME ": DamageSetup failed\n");
+    }
+    return TRUE;
+}
+
+/* ---- RandR screen size (dynamic resolution) ------------------------- */
+
+static Bool
+prl_rr_get_info(ScreenPtr pScreen, Rotation *rotations)
+{
+    *rotations = RR_Rotate_0;
+    return TRUE;
+}
+
+static Bool
+prl_rr_set_size(ScreenPtr pScreen, CARD16 width, CARD16 height,
+                CARD32 mmWidth, CARD32 mmHeight)
+{
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    PrlPtr pPrl = pScrn->driverPrivate;
+    PixmapPtr root;
+    int stride = (width * 4 + 31) & ~31;
+
+    if (width == pScrn->virtualX && height == pScrn->virtualY)
+        return TRUE;
+    if (width < 640 || width > 2560 || height < 480 || height > 1600)
+        return FALSE;
+
+    /* host mode change via VGA extended sequencer regs (0x8114 MM
+     * SET_MODE would displace the share-state consumer — never use it) */
+    prl_vga_mode(32, width, height, stride, pPrl->fb_offset);
+
+    pScrn->virtualX = width;
+    pScrn->virtualY = height;
+    pScrn->displayWidth = stride / 4;
+    pScrn->frameX0 = pScrn->frameY0 = 0;
+    pScrn->frameX1 = width - 1;
+    pScrn->frameY1 = height - 1;
+    if (pScrn->currentMode) {
+        pScrn->currentMode->HDisplay = width;
+        pScrn->currentMode->VDisplay = height;
+    }
+
+    root = pScreen->GetScreenPixmap(pScreen);
+    pScreen->ModifyPixmapHeader(root, width, height,
+                                root->drawable.depth,
+                                root->drawable.bitsPerPixel,
+                                stride, pPrl->vram + pPrl->fb_offset);
+
+    pScreen->mmWidth = mmWidth ? mmWidth : pScreen->mmWidth;
+    pScreen->mmHeight = mmHeight ? mmHeight : pScreen->mmHeight;
+
+    /* everything on screen is now garbage; reannounce the full frame */
+    pthread_mutex_lock(&pPrl->lock);
+    RegionEmpty(&pPrl->pending_dirty);
+    {
+        BoxRec whole = { 0, 0, width - 1, height - 1 };
+        RegionReset(&pPrl->pending_dirty, &whole);
+    }
+    pPrl->dirty_pending = TRUE;
+    pthread_mutex_unlock(&pPrl->lock);
+
+    RRScreenSizeNotify(pScreen);
+    xf86Msg(X_INFO, PRL_NAME ": RandR resize to %dx%d (stride %d)\n",
+            width, height, stride);
+    return TRUE;
 }
 
 static Bool
@@ -644,8 +1030,33 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
     xf86SetBlackWhitePixels(pScreen);
     xf86SetBackingStore(pScreen);
 
-    /* software cursor */
+    /* hardware cursor via MOUSE_SET_POINTER; miDCInitialize must run
+     * first (xf86InitCursor wraps its sprite funcs); while the channel
+     * probe is pending the cursor silently stays software */
     miDCInitialize(pScreen, xf86GetPointerScreenFuncs());
+    pPrl->cursor_info = xf86CreateCursorInfoRec();
+    if (pPrl->cursor_info) {
+        pPrl->cursor_info->MaxWidth = 64;
+        pPrl->cursor_info->MaxHeight = 64;
+        pPrl->cursor_info->Flags = HARDWARE_CURSOR_ARGB |
+                                   HARDWARE_CURSOR_SOURCE_MASK_INTERLEAVE_1;
+        pPrl->cursor_info->SetCursorColors = prl_set_cursor_colors;
+        pPrl->cursor_info->SetCursorPosition = prl_set_cursor_position;
+        pPrl->cursor_info->LoadCursorImage = prl_load_cursor_image;
+        pPrl->cursor_info->HideCursor = prl_hide_cursor;
+        pPrl->cursor_info->ShowCursor = prl_show_cursor;
+        pPrl->cursor_info->UseHWCursor = prl_use_hw_cursor;
+        pPrl->cursor_info->UseHWCursorARGB = prl_use_hw_cursor_argb;
+        pPrl->cursor_info->LoadCursorARGB = prl_load_cursor_argb;
+        if (xf86InitCursor(pScreen, pPrl->cursor_info)) {
+            xf86Msg(X_INFO, PRL_NAME ": hw cursor initialized\n");
+        } else {
+            xf86DestroyCursorInfoRec(pPrl->cursor_info);
+            pPrl->cursor_info = NULL;
+            xf86Msg(X_WARNING, PRL_NAME ": hw cursor init failed, "
+                    "staying software\n");
+        }
+    }
 
     if (!miCreateDefColormap(pScreen)) {
         xf86Msg(X_ERROR, PRL_NAME ": miCreateDefColormap failed\n");
@@ -662,26 +1073,41 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
         return FALSE;
     xf86Msg(X_INFO, PRL_NAME ": colormap OK\n");
 
-    /* Damage/SHARE_STATE: deferred. VRAM-direct framebuffer is already
-       host-visible via VESA scanout; share-state is only needed for the
-       host compositor (dynamic resolution / multi-head), handled in a
-       follow-up. Registering Damage on this pixmap path currently faults. */
-#if 0
-    RegionInit(&pPrl->damage_region, (BoxPtr)NULL, 0);
-    pPrl->damage_pending = FALSE;
-    DamageSetup(pScreen);
-    if ((pPrl->damage = DamageCreate(prl_damage_callback, NULL,
-                                     DamageReportNonEmpty,
-                                     FALSE, pScreen, pScreen))) {
-        DamageRegister(&pScreen->GetScreenPixmap(pScreen)->drawable, pPrl->damage);
-        DamageSetReportAfterOp(pPrl->damage, TRUE);
-        xf86Msg(X_INFO, PRL_NAME ": Damage registered\n");
+    /* Damage tracking → SHARE_STATE dirty bounds; registered from
+     * CreateScreenResources when the screen pixmap actually exists */
+    RegionInit(&pPrl->pending_dirty, (BoxPtr)NULL, 0);
+    pPrl->dirty_pending = FALSE;
+    pPrl->mouse_changed = FALSE;
+    pPrl->mbx_cmd = 0;
+    pPrl->cursor_ok = FALSE;
+    pPrl->share_ok = FALSE;
+    pPrl->CreateScreenResources = pScreen->CreateScreenResources;
+    pScreen->CreateScreenResources = prl_create_screen_resources;
+
+    /* RandR 1.1 screen size: xrandr --fb WxH drives dynamic resolution */
+    if (RRScreenInit(pScreen)) {
+        rrScrPrivPtr rp = rrGetScrPriv(pScreen);
+
+        rp->rrGetInfo = prl_rr_get_info;
+        rp->rrScreenSetSize = prl_rr_set_size;
+        RRScreenSetSizeRange(pScreen, 640, 480, 2560, 1600);
+        xf86Msg(X_INFO, PRL_NAME ": RandR size range 640x480-2560x1600\n");
+    } else {
+        xf86Msg(X_WARNING, PRL_NAME ": RRScreenInit failed\n");
     }
 
-    /* wrap BlockHandler for periodic share-state flush */
-    pPrl->BlockHandler = pScreen->BlockHandler;
-    pScreen->BlockHandler = prl_block_handler;
-#endif
+    /* sender thread: probes the host channels, then flushes dirty bounds,
+     * cursor updates and the ~1s share-state heartbeat off the main loop */
+    RegisterBlockAndWakeupHandlers(prl_block_noop, prl_wakeup_handler, pScreen);
+    pPrl->thread_run = TRUE;
+    if (pthread_create(&pPrl->share_thread, NULL, prl_share_thread,
+                       pPrl) == 0) {
+        pPrl->thread_started = TRUE;
+        xf86Msg(X_INFO, PRL_NAME ": share-state sender thread started\n");
+    } else {
+        pPrl->thread_run = FALSE;
+        xf86Msg(X_WARNING, PRL_NAME ": sender thread create failed\n");
+    }
 
     xf86Msg(X_INFO, PRL_NAME ": ScreenInit complete\n");
 
@@ -690,24 +1116,37 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
 }
 
 static Bool
-PrlCloseScreen(ScreenPtr pScreen, int argc, char **argv)
+PrlCloseScreen(ScreenPtr pScreen)
 {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     PrlPtr pPrl = pScrn->driverPrivate;
+    Bool ok;
 
     if (pPrl) {
+        /* stop the sender first; cancel in case it is parked in a
+         * blocked toolgate write (the host consumer may be gone) */
+        if (pPrl->thread_started) {
+            pPrl->thread_run = FALSE;
+            pthread_cancel(pPrl->share_thread);
+        }
         if (pPrl->damage) {
             DamageUnregister(pPrl->damage);
             DamageDestroy(pPrl->damage);
             pPrl->damage = NULL;
         }
-        if (pPrl->BlockHandler) {
-            pScreen->BlockHandler = pPrl->BlockHandler;
-            pPrl->BlockHandler = NULL;
+        if (pPrl->cursor_info) {
+            xf86DestroyCursorInfoRec(pPrl->cursor_info);
+            pPrl->cursor_info = NULL;
         }
-        RegionUninit(&pPrl->damage_region);
+        RegionUninit(&pPrl->pending_dirty);
+        RemoveBlockAndWakeupHandlers(prl_block_noop, prl_wakeup_handler, pScreen);
+        if (pPrl->CreateScreenResources)
+            pScreen->CreateScreenResources = pPrl->CreateScreenResources;
     }
-    return TRUE;
+    if (pPrl && pPrl->CloseScreen)
+        pScreen->CloseScreen = pPrl->CloseScreen;
+    ok = pScreen->CloseScreen ? (*pScreen->CloseScreen)(pScreen) : TRUE;
+    return ok;
 }
 
 static void
@@ -731,6 +1170,32 @@ static Bool
 PrlSwitchMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
 {
     return TRUE;
+}
+
+static Bool
+PrlEnterVT(ScrnInfoPtr pScrn)
+{
+    PrlPtr pPrl = pScrn->driverPrivate;
+
+    /* the console owned the scanout while we were away; reannounce the
+     * whole frame so the host picks our framebuffer up again */
+    pthread_mutex_lock(&pPrl->lock);
+    {
+        BoxRec whole = { 0, 0, pScrn->virtualX - 1, pScrn->virtualY - 1 };
+
+        RegionEmpty(&pPrl->pending_dirty);
+        RegionReset(&pPrl->pending_dirty, &whole);
+    }
+    pPrl->dirty_pending = TRUE;
+    pthread_mutex_unlock(&pPrl->lock);
+    return TRUE;
+}
+
+static void
+PrlLeaveVT(ScrnInfoPtr pScrn)
+{
+    /* scanout returns to the kernel console; nothing to undo */
+    (void)pScrn;
 }
 
 static void

@@ -15,10 +15,22 @@ the 256 MB virtual VRAM, and the toolgate protocol for host session handshake.
   the live vesafb geometry — set via `GRUB_GFXMODE=1920x1200x32`)
 - ✅ Stable under real workloads: terminals, browsers, window managers
   (fixed a 7 KB heap overflow in the colormap path — see below)
-- 🚧 Damage→SHARE_STATE dirty-region flush (deferred; VRAM direct is already
-  host-visible through VESA scanout — needed only for host compositor /
-  dynamic resolution / multi-head)
-- 🚧 Hardware cursor, dynamic resolution
+- ✅ Damage→SHARE_STATE dirty-region flush to the host compositor
+  (requires the `prl-keeper` service — see below)
+- ✅ Hardware cursor via MOUSE_SET_POINTER (0x8100/0x8101, ARGB up to 64x64)
+- ✅ Dynamic resolution: RandR screen resize 640x480–2560x1600
+  (`xrandr --fb 1920x1200`); host mode-set through the VGA extended
+  sequencer registers (MM SET_MODE 0x8114 would displace the share-state
+  consumer and is never used)
+
+## The prl-keeper service
+
+The host only serves SHARE_STATE (0x8117) requests while an original
+2017 prlvideo driver lifecycle is running. `prl-keeper.service` keeps a
+hidden Xorg 1.19 + prlvideo on VT8 alive (Restart=always) so the channel
+stays open; the driver probes it at startup and degrades gracefully
+(software cursor, no dirty flush) when it is absent. Cursor requests
+(0x8100/0x8101) are ungated and work without the keeper.
 
 ## The colormap heap overflow
 
