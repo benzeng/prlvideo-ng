@@ -86,6 +86,7 @@ typedef struct {
     volatile Bool probe_note_pending;
     ssize_t last_write_rc;
     int last_write_errno;
+    unsigned frame_w, frame_h;   /* full-frame reannounce bounds */
 
     DamagePtr damage;
     xf86CursorInfoPtr cursor_info;
@@ -143,6 +144,7 @@ typedef struct {
 } PrlOpts;
 
 static const OptionInfoRec PrlOptions[] = {
+    { 301, "ShareState", OPTV_BOOLEAN, {0}, FALSE },
     { -1, NULL, OPTV_NONE, {0}, FALSE }
 };
 
@@ -666,9 +668,7 @@ prl_share_thread(void *arg)
     BoxRec box;
     unsigned char plane[6 + 64 * 64 * 4];
     unsigned mx, my, hsx = 0, hsy = 0;
-    int mbx;
-    Bool flush, mouse;
-    int beats = 0;
+    int mbx = 0;
 
     sigfillset(&set);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
@@ -677,21 +677,13 @@ prl_share_thread(void *arg)
 
     RegionInit(&dirty, (BoxPtr)NULL, 0);
     while (pPrl->thread_run) {
-        usleep(15000);
-
-        flush = FALSE; mouse = FALSE; mbx = 0;
         pthread_mutex_lock(&pPrl->lock);
         if (pPrl->dirty_pending) {
             RegionUnion(&dirty, &dirty, &pPrl->pending_dirty);
             RegionEmpty(&pPrl->pending_dirty);
             pPrl->dirty_pending = FALSE;
-            flush = TRUE;
         }
         mx = pPrl->mouse_x; my = pPrl->mouse_y;
-        if (pPrl->mouse_changed) {
-            pPrl->mouse_changed = FALSE;
-            mouse = TRUE;
-        }
         if (pPrl->mbx_cmd) {
             mbx = pPrl->mbx_cmd;
             pPrl->mbx_cmd = 0;
@@ -700,29 +692,33 @@ prl_share_thread(void *arg)
         }
         pthread_mutex_unlock(&pPrl->lock);
 
-        /* heartbeat keeps the host consumer warm even when idle */
-        if (++beats >= 66) {          /* ~1s at 15ms cadence */
-            beats = 0;
-            flush = TRUE;
-        }
-
-        if (flush || mouse) {
-            if (!RegionNil(&dirty))
-                box = *RegionExtents(&dirty);
-            else {
-                box.x1 = box.y1 = 0;
-                box.x2 = 0xffff; box.y2 = 0xffff;
-            }
-            prl_send_share_state(pPrl, box.x1, box.y1,
-                                 box.x2 + 1, box.y2 + 1,
-                                 mx + hsx, my + hsy);
+        /* The host consumer is a lazy queue: a share only completes when
+         * some activity (new request, view switch) kicks it.  The
+         * original driver ran this loop with no sleep at all — the
+         * blocking write itself paces it and keeps the queue hot.  Send
+         * on every pass: dirty extents when we have them, otherwise a
+         * full-frame reannounce (also fixes the 0x10000-overflow bounds
+         * the old heartbeat sent). */
+        if (!RegionNil(&dirty)) {
+            box = *RegionExtents(&dirty);
             RegionEmpty(&dirty);
+        } else {
+            box.x1 = box.y1 = 0;
+            box.x2 = pPrl->frame_w - 1;
+            box.y2 = pPrl->frame_h - 1;
         }
+        prl_send_share_state(pPrl, box.x1, box.y1,
+                             box.x2 + 1, box.y2 + 1,
+                             mx + hsx, my + hsy);
 
         if (mbx == 1)
             prl_send_cursor_show(pPrl, plane);
         else if (mbx == 2)
             prl_send_cursor_hide(pPrl);
+        mbx = 0;
+
+        usleep(1000);    /* pacing floor; the write blocks far longer
+                            whenever the consumer runs cold */
     }
     RegionUninit(&dirty);
     return NULL;
@@ -1104,17 +1100,38 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
     }
 
     /* sender thread: probes the host channels, then flushes dirty bounds,
-     * cursor updates and the ~1s share-state heartbeat off the main loop */
-    RegisterBlockAndWakeupHandlers(prl_block_noop, prl_wakeup_handler, pScreen);
-    pPrl->thread_run = TRUE;
-    if (pthread_create(&pPrl->share_thread, NULL, prl_share_thread,
-                       pPrl) == 0) {
-        pPrl->thread_started = TRUE;
-        xf86Msg(X_INFO, PRL_NAME ": share-state sender thread started\n");
-    } else {
-        pPrl->thread_run = FALSE;
-        xf86Msg(X_WARNING, PRL_NAME ": sender thread create failed\n");
+     * cursor updates and the share-state heartbeat off the main loop.
+     * OPT-IN ONLY: the probe traffic itself switches the host display
+     * pipeline from continuous scanout into tools-managed mode, and
+     * without a working repaint path that freezes the picture. */
+    {
+        const char *v = pScrn->options ?
+            xf86FindOptionValue(pScrn->options, "ShareState") : NULL;
+        Bool share_state = v && (!strcasecmp(v, "true") ||
+                                 !strcasecmp(v, "on") ||
+                                 !strcasecmp(v, "yes"));
+
+        if (share_state) {
+            RegisterBlockAndWakeupHandlers(prl_block_noop,
+                                           prl_wakeup_handler, pScreen);
+            pPrl->thread_run = TRUE;
+            if (pthread_create(&pPrl->share_thread, NULL, prl_share_thread,
+                               pPrl) == 0) {
+                pPrl->thread_started = TRUE;
+                xf86Msg(X_INFO, PRL_NAME ": sender thread started "
+                        "(ShareState enabled)\n");
+            } else {
+                pPrl->thread_run = FALSE;
+                xf86Msg(X_WARNING, PRL_NAME ": sender thread create failed\n");
+            }
+        } else {
+            xf86Msg(X_INFO, PRL_NAME ": ShareState disabled - staying in "
+                    "continuous-scanout mode (no toolgate probe traffic)\n");
+        }
     }
+
+    pPrl->frame_w = pScrn->virtualX;
+    pPrl->frame_h = pScrn->virtualY;
 
     xf86Msg(X_INFO, PRL_NAME ": ScreenInit complete\n");
 
