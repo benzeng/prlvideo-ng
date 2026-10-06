@@ -436,13 +436,13 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
                 continue;
             mode->HDisplay = modes[i][0];
             mode->VDisplay = modes[i][1];
-            mode->HTotal = modes[i][0];
-            mode->VTotal = modes[i][1];
-            mode->HSyncStart = modes[i][0];
-            mode->HSyncEnd = modes[i][0];
-            mode->VSyncStart = modes[i][1];
-            mode->VSyncEnd = modes[i][1];
-            mode->Clock = 100000;
+            mode->HSyncStart = modes[i][0] + 40;
+            mode->HSyncEnd = modes[i][0] + 120;
+            mode->HTotal = modes[i][0] + 200;
+            mode->VSyncStart = modes[i][1] + 5;
+            mode->VSyncEnd = modes[i][1] + 15;
+            mode->VTotal = modes[i][1] + 30;
+            mode->Clock =  65000000 / (modes[i][0] + 200) / (modes[i][1] + 30) * ((modes[i][0]+200) * (modes[i][1]+30)) / ((modes[i][0]+200) * (modes[i][1]+30));
             mode->status = MODE_OK;
             mode->type = M_T_DRIVER;
             mode->name = xnfalloc(32);
@@ -483,6 +483,14 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
             pScrn->yDpi = 96;
         xf86SetDepthBpp(pScrn, pScrn->depth, pScrn->bitsPerPixel, 32, 32);
         xf86SetDefaultVisual(pScrn, -1);
+        {
+            rgb zeros = { 0, 0, 0 };
+            Gamma gzeros = { 0.0, 0.0, 0.0 };
+            if (!xf86SetWeight(pScrn, zeros, zeros))
+                return FALSE;
+            if (!xf86SetGamma(pScrn, gzeros))
+                return FALSE;
+        }
         xf86PrintModes(pScrn);
         xf86SetCrtcForModes(pScrn, 0);
     }
@@ -634,7 +642,11 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
     }
     xf86Msg(X_INFO, PRL_NAME ": default colormap OK\n");
 
-    if (!xf86HandleColormaps(pScreen, 256, 8, prl_load_palette, NULL,
+    /* fb builds depth-32 visuals with ColormapEntries=2048 on this screen;
+       CMapReinstallMap fills PreAllocIndices[maxColors] with numColors, so
+       maxColors must cover the largest visual's entries or it overflows the
+       heap by 7KB (corrupting the SYNC extension entry -> terminal crash). */
+    if (!xf86HandleColormaps(pScreen, 2048, 8, prl_load_palette, NULL,
                              CMAP_PALETTED_TRUECOLOR))
         return FALSE;
     xf86Msg(X_INFO, PRL_NAME ": colormap OK\n");
