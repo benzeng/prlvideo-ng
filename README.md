@@ -11,7 +11,8 @@ the 256 MB virtual VRAM, and the toolgate protocol for host session handshake.
 
 - ✅ Full startup: PCI probe → GL_VERSION handshake → fbScreenInit → colormap
 - ✅ Visible desktop (lightdm/Xfce) rendered by this driver via VRAM-direct FB
-- ✅ xdpyinfo: 1600x1200, depths 1/4/8/15/16/24/32
+- ✅ xdpyinfo: 1920x1200 (matches host 16:10 fullscreen; mode derives from
+  the live vesafb geometry — set via `GRUB_GFXMODE=1920x1200x32`)
 - ✅ Stable under real workloads: terminals, browsers, window managers
   (fixed a 7 KB heap overflow in the colormap path — see below)
 - 🚧 Damage→SHARE_STATE dirty-region flush (deferred; VRAM direct is already
@@ -57,6 +58,11 @@ EndSection
 
 Requires the kernel-side patches (prl_tg / prl_fs / prl_eth / prl_fs_freeze)
 from `prl-tools-kernel7-patch` so `/proc/driver/prl_vtg` and the VRAM BAR exist.
+
+Resolution follows the boot framebuffer: set `GRUB_GFXMODE=<W>x<H>x32` and
+`GRUB_GFXPAYLOAD_LINUX=keep` in `/etc/default/grub`, then `update-grub` —
+the driver reads the live scanout geometry from fb0 at PreInit and matches
+it exactly.
 
 ## License
 
