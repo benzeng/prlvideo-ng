@@ -934,8 +934,15 @@ prl_rr_set_size(ScreenPtr pScreen, CARD16 width, CARD16 height,
     if (width < 640 || width > 2560 || height < 480 || height > 1600)
         return FALSE;
 
-    /* host mode change via VGA extended sequencer regs (0x8114 MM
-     * SET_MODE would displace the share-state consumer — never use it) */
+    /* The extended-sequencer mode-set switches the host into read-once +
+     * SHARE_STATE mode; only do it while the share consumer is proven
+     * live (sender thread probes completed), else the screen would
+     * freeze.  0x8114 MM SET_MODE would displace the consumer — never. */
+    if (!pPrl->share_ok) {
+        xf86Msg(X_WARNING, PRL_NAME ": resize needs a live share-state "
+                "consumer (currently closed)\n");
+        return FALSE;
+    }
     prl_vga_mode(32, width, height, stride, pPrl->fb_offset);
 
     pScrn->virtualX = width;
@@ -985,13 +992,13 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
 
     stride = (unsigned)pScrn->displayWidth * 4;
 
-    /* host mode-set via VGA extended regs (VBE-compatible).  Idempotent,
-     * and heals the text-mode reset the prl-keeper's old driver performs
-     * on its LeaveVT whenever lightdm takes the console. */
+    /* NO host mode-set here: programming the VGA extended sequencer
+     * switches the host display pipeline from continuous VESA scanout
+     * (boot mode, always live) into read-once + SHARE_STATE mode, which
+     * freezes the picture unless a live consumer takes our dirty
+     * notifications.  The boot mode already matches fb0 geometry. */
     xf86Msg(X_INFO, PRL_NAME ": ScreenInit w=%d h=%d stride=%u off=0x%x\n",
             pScrn->displayWidth, pScrn->virtualY, stride, pPrl->fb_offset);
-    prl_vga_mode(32, (unsigned)pScrn->displayWidth, (unsigned)pScrn->virtualY,
-                 stride, pPrl->fb_offset);
     xf86Msg(X_INFO, PRL_NAME ": calling fbScreenInit\n");
 
     /* VRAM direct mapping (fb_offset=0): writes go straight to host
@@ -1177,11 +1184,8 @@ PrlEnterVT(ScrnInfoPtr pScrn)
 {
     PrlPtr pPrl = pScrn->driverPrivate;
 
-    /* the console owned the scanout while we were away; reprogram the
-     * host mode and reannounce the whole frame */
-    prl_vga_mode(32, (unsigned)pScrn->displayWidth,
-                 (unsigned)pScrn->virtualY,
-                 (unsigned)pScrn->displayWidth * 4, pPrl->fb_offset);
+    /* the console owned the scanout while we were away; reannounce the
+     * whole frame so the host picks our framebuffer up again */
     pthread_mutex_lock(&pPrl->lock);
     {
         BoxRec whole = { 0, 0, pScrn->virtualX - 1, pScrn->virtualY - 1 };
