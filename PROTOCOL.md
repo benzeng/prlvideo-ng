@@ -416,3 +416,25 @@ ScreenFunctions 等), xfwm4 为 terminal 创建装饰+持续重绘时踩到 NULL
   DamageDestroy 在 damage 层 CloseScreen 内部被二次调用 → SIGSEGV@0x80
 - RegisterBlockAndWakeupHandlers 两个 handler 都不能传 NULL
 - VT 钩子（Enter/LeaveVT）必填，chvt 切走即 NULL 调用
+
+## ⚠️ keeper 生产化失败战报（2026-10-07 凌晨，四连教训）
+
+keeper（老驱动 Xorg 常驻 vt8）作为 systemd 服务在生产环境触发四连故障：
+1. **文本模式重置**：lightdm 抢占控制台 → 老驱动 LeaveVT 执行
+   "Reset VGA text mode" → 主显示花屏（对策已入驱动：ScreenInit/EnterVT
+   主动 prl_vga_mode 自愈，实测 X 内端口写入一直有效，旧注释是错的）
+2. **帧缓冲踩踏**：两 X 共享 VRAM offset 0，keeper 激活时其黑色根窗口
+   物理覆盖主屏幕内容 → 黑屏（X 无从得知，需 greeter 重绘救回）
+3. **输入 grab 争夺**：keeper 也打开键鼠设备持 evdev grab → 主 greeter
+   无法操作（对策 AutoAddDevices=false 有效）
+4. **VT 状态机污染**：多次启停 + 宿主 macOS 全屏切换叠加，控制台
+   tty1→tty2→tty3 递进漂移，主 Xorg VT 追踪失步后永久丢弃输入
+
+结论：keeper 作为"第二个完整 X 栈跑在共享显示硬件上"的方案不可行，
+已停用。share-state 门控的真正钥匙（宿主侧显示会话机制）留待后续
+按非 X 架构重新设计（候选：uvesafb+工具进程 / 逆向 prlcc 事件源）。
+当前基线：脏区/光标通道探针 + 动态分辨率（不依赖 keeper）全部保留，
+share 消费者关闭时驱动优雅降级（软件光标、发送线程安全挂起）。
+
+附：keeper 停止后 share 通道仍存活一段时间（宿主会话存留期，与当年
+"衰减"现象一致）——期间脏区上报为免费增益。

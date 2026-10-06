@@ -1,0 +1,95 @@
+To: xorg-devel@lists.freedesktop.org
+Subject: [PATCH] xf86cmap: size PreAllocIndices from the screen's visuals
+
+[NOTE FOR YOU (delete before sending): fill in your real name/e-mail in
+From and Signed-off-by below. Patch is also saved separately as
+xf86cmap-PreAllocIndices.patch — attach it or keep it inline as here.]
+
+Hi,
+
+xf86HandleColormaps() allocates the per-screen PreAllocIndices scratch
+array using the driver-supplied maxColors argument, but nothing sizes or
+validates that argument against the visuals the screen actually has.
+Meanwhile CMapAllocateColormapPrivate() sizes a colormap from
+pVisual->ColormapEntries whenever CMapColormapUseMax() is true, and both
+CMapReinstallMap() and CMapStoreColors() fill PreAllocIndices with that
+many entries:
+
+    int i = cmapPriv->numColors;            /* pVisual->ColormapEntries */
+    int *indices = pScreenPriv->PreAllocIndices;   /* int[maxColors] */
+    while (i--)
+        indices[i] = i;                     /* writes past the array */
+
+If a driver follows the historical convention and passes maxColors = 256
+while the screen exposes a visual with more colormap entries, this is a
+deterministic, repeatable heap overflow.
+
+We hit this in a clean-room DDX written against current X.Org: fb built a
+depth-32 DirectColor visual with ColormapEntries = 2048, the driver passed
+256, and installing that colormap (any X client can do it with
+XCreateColormap + XInstallColormap — opening a terminal did it) overflowed
+the 1 KB allocation by exactly 7168 bytes. The corruption happened to land
+on an ExtensionEntry, so the crash looked like a bad request dispatch and
+was painful to trace. Valgrind + a hardware watchpoint found the writer.
+
+The same wall was hit driver-side on depth 30 (indices up to 1023 vs 256):
+https://www.spinics.net/lists/amd-gfx/msg06445.html
+and modesetting sidesteps the related depth>24 LUT problem by not calling
+xf86HandleColormaps() at all:
+https://lists.freedesktop.org/archives/xorg-devel/2018-February/055867.html
+
+Since a local unprivileged X client can trigger the overflow repeatedly
+and the data written is a fixed sequential pattern (pointers become
+non-mappable low addresses, but lengths/indices/flags get corrupted), it
+is at least a reliable remote-for-a-local-client DoS of a possibly
+privileged server, and a constrained heap-corruption primitive otherwise.
+
+The patch below keeps every existing semantic and only sizes the scratch
+array from the screen's actual visuals, warning when the driver
+underreported. It applies to current master (verified the code is
+unchanged there).
+
+From: Your Name <you@example.com>
+Date: Tue, 6 Oct 2026 23:30:00 +0800
+
+---
+ hw/xfree86/common/xf86cmap.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/hw/xfree86/common/xf86cmap.c b/hw/xfree86/common/xf86cmap.c
+@@ -154,6 +154,7 @@ xf86HandleColormaps(ScreenPtr pScreen,
+     LOCO *gamma;
+     int *indices;
+     int elements;
++    int i, indicesNeeded = maxColors;
+
+     if (!maxColors || !sigRGBbits ||
+         (!loadPalette && !xf86_crtc_supports_gamma(pScrn)))
+@@ -164,7 +165,24 @@ xf86HandleColormaps(ScreenPtr pScreen,
+     if (!(gamma = xallocarray(elements, sizeof(LOCO))))
+         return FALSE;
+
+-    if (!(indices = xallocarray(maxColors, sizeof(int)))) {
++    /* CMapAllocateColormapPrivate sizes a colormap from
++       pVisual->ColormapEntries whenever CMapColormapUseMax() is true, and
++       both CMapReinstallMap() and CMapStoreColors() fill PreAllocIndices
++       with that many entries.  Drivers have historically passed 256 here;
++       on screens whose visuals have more entries (deep DirectColor, e.g.
++       depth 30 or 32) that overflows the array.  Size the scratch array
++       from the actual visuals and warn if the driver underreported. */
++    for (i = 0; i < pScreen->numVisuals; i++) {
++        if (pScreen->visuals[i].ColormapEntries > indicesNeeded)
++            indicesNeeded = pScreen->visuals[i].ColormapEntries;
++    }
++    if (indicesNeeded > maxColors)
++        LogMessageVerb(X_WARNING, 0,
++                       "xf86HandleColormaps: maxColors (%d) is smaller than "
++                       "the largest visual colormap size (%d); growing "
++                       "PreAllocIndices\n", maxColors, indicesNeeded);
++
++    if (!(indices = xallocarray(indicesNeeded, sizeof(int)))) {
+         free(gamma);
+         return FALSE;
+     }
+
+Signed-off-by: Your Name <you@example.com>

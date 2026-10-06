@@ -1,0 +1,36 @@
+--- a/hw/xfree86/common/xf86cmap.c
++++ b/hw/xfree86/common/xf86cmap.c
+@@ -154,6 +154,7 @@
+     LOCO *gamma;
+     int *indices;
+     int elements;
++    int i, indicesNeeded = maxColors;
+ 
+     if (!maxColors || !sigRGBbits ||
+         (!loadPalette && !xf86_crtc_supports_gamma(pScrn)))
+@@ -164,7 +165,24 @@
+     if (!(gamma = xallocarray(elements, sizeof(LOCO))))
+         return FALSE;
+ 
+-    if (!(indices = xallocarray(maxColors, sizeof(int)))) {
++    /* CMapAllocateColormapPrivate sizes a colormap from
++       pVisual->ColormapEntries whenever CMapColormapUseMax() is true, and
++       both CMapReinstallMap() and CMapStoreColors() fill PreAllocIndices
++       with that many entries.  Drivers have historically passed 256 here;
++       on screens whose visuals have more entries (deep DirectColor, e.g.
++       depth 30 or 32) that overflows the array.  Size the scratch array
++       from the actual visuals and warn if the driver underreported. */
++    for (i = 0; i < pScreen->numVisuals; i++) {
++        if (pScreen->visuals[i].ColormapEntries > indicesNeeded)
++            indicesNeeded = pScreen->visuals[i].ColormapEntries;
++    }
++    if (indicesNeeded > maxColors)
++        LogMessageVerb(X_WARNING, 0,
++                       "xf86HandleColormaps: maxColors (%d) is smaller than "
++                       "the largest visual colormap size (%d); growing "
++                       "PreAllocIndices\n", maxColors, indicesNeeded);
++
++    if (!(indices = xallocarray(indicesNeeded, sizeof(int)))) {
+         free(gamma);
+         return FALSE;
+     }

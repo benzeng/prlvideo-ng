@@ -985,13 +985,13 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
 
     stride = (unsigned)pScrn->displayWidth * 4;
 
-    /* host mode-set via VGA extended regs (VBE-compatible) */
+    /* host mode-set via VGA extended regs (VBE-compatible).  Idempotent,
+     * and heals the text-mode reset the prl-keeper's old driver performs
+     * on its LeaveVT whenever lightdm takes the console. */
     xf86Msg(X_INFO, PRL_NAME ": ScreenInit w=%d h=%d stride=%u off=0x%x\n",
             pScrn->displayWidth, pScrn->virtualY, stride, pPrl->fb_offset);
-#if 0 /* VGA port access blocked by Xorg VGA arbiter; vesafb already in mode */
     prl_vga_mode(32, (unsigned)pScrn->displayWidth, (unsigned)pScrn->virtualY,
                  stride, pPrl->fb_offset);
-#endif
     xf86Msg(X_INFO, PRL_NAME ": calling fbScreenInit\n");
 
     /* VRAM direct mapping (fb_offset=0): writes go straight to host
@@ -1177,8 +1177,11 @@ PrlEnterVT(ScrnInfoPtr pScrn)
 {
     PrlPtr pPrl = pScrn->driverPrivate;
 
-    /* the console owned the scanout while we were away; reannounce the
-     * whole frame so the host picks our framebuffer up again */
+    /* the console owned the scanout while we were away; reprogram the
+     * host mode and reannounce the whole frame */
+    prl_vga_mode(32, (unsigned)pScrn->displayWidth,
+                 (unsigned)pScrn->virtualY,
+                 (unsigned)pScrn->displayWidth * 4, pPrl->fb_offset);
     pthread_mutex_lock(&pPrl->lock);
     {
         BoxRec whole = { 0, 0, pScrn->virtualX - 1, pScrn->virtualY - 1 };
