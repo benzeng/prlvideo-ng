@@ -12,10 +12,24 @@ the 256 MB virtual VRAM, and the toolgate protocol for host session handshake.
 - ✅ Full startup: PCI probe → GL_VERSION handshake → fbScreenInit → colormap
 - ✅ Visible desktop (lightdm/Xfce) rendered by this driver via VRAM-direct FB
 - ✅ xdpyinfo: 1600x1200, depths 1/4/8/15/16/24/32
+- ✅ Stable under real workloads: terminals, browsers, window managers
+  (fixed a 7 KB heap overflow in the colormap path — see below)
 - 🚧 Damage→SHARE_STATE dirty-region flush (deferred; VRAM direct is already
   host-visible through VESA scanout — needed only for host compositor /
   dynamic resolution / multi-head)
 - 🚧 Hardware cursor, dynamic resolution
+
+## The colormap heap overflow
+
+Opening a terminal used to crash X back to the login screen. Root cause: fb
+builds depth-32 visuals with `ColormapEntries = 2048`, but the driver passed
+`maxColors = 256` to `xf86HandleColormaps()`. On colormap install,
+`CMapReinstallMap()` (hw/xfree86/common/xf86cmap.c) fills the
+`maxColors`-sized `PreAllocIndices` array with `numColors` entries — 2048 ints
+into a 256-int allocation, a 7 KB heap overflow that happened to land on the
+SYNC extension's `ExtensionEntry` and turned the next dispatched request into
+a jump through a garbage pointer. Fix: pass `2048` as `maxColors` (any value
+covering the largest visual's `ColormapEntries` works).
 
 ## Why
 
