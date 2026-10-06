@@ -396,7 +396,83 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
                             reads offset 0, so this is visible immediately.
                             (16MB offset path needs a valid host mode-set that
                             Xorg's VGA arbiter currently blocks.) */
-    pPrl->vram_len = pPrl->fb_offset + (size_t)7680 * 2160;
+
+    /* Scanout geometry is fixed at boot (GRUB_GFXMODE -> vesafb); X must
+       match it exactly or the picture skews. */
+    {
+        unsigned short fw = 1600, fh = 1200;
+        char vs[64];
+        int vfd = open("/sys/class/graphics/fb0/virtual_size", O_RDONLY);
+
+        if (vfd >= 0) {
+            ssize_t n = read(vfd, vs, sizeof(vs) - 1);
+            close(vfd);
+            if (n > 0) {
+                vs[n] = '\0';
+                if (sscanf(vs, "%hu,%hu", &fw, &fh) != 2 || !fw || !fh) {
+                    fw = 1600;
+                    fh = 1200;
+                }
+            }
+        }
+        xf86Msg(X_INFO, PRL_NAME ": fb0 scanout %ux%u\n", fw, fh);
+
+        {
+            size_t need = (size_t)fw * 4 * fh;
+            size_t floor_ = (size_t)7680 * 2160;
+
+            pPrl->vram_len = pPrl->fb_offset + (need > floor_ ? need : floor_);
+        }
+
+        /* single mode = live scanout size (SwitchMode cannot reprogram the
+           host, so advertising alternates would only skew the display) */
+        {
+            DisplayModePtr mode = calloc(1, sizeof(DisplayModeRec));
+
+            pScrn->videoRam = 256 * 1024;
+            pScrn->bitsPerPixel = 32;
+            pScrn->depth = 24;
+            pScrn->defaultVisual = TrueColor;
+            pScrn->offset.red = 16;
+            pScrn->offset.green = 8;
+            pScrn->offset.blue = 0;
+            pScrn->mask.red = 0xff0000;
+            pScrn->mask.green = 0xff00;
+            pScrn->mask.blue = 0xff;
+            pScrn->rgbBits = 8;
+
+            if (mode) {
+                mode->HDisplay = fw;
+                mode->VDisplay = fh;
+                mode->HSyncStart = fw + 40;
+                mode->HSyncEnd = fw + 120;
+                mode->HTotal = fw + 200;
+                mode->VSyncStart = fh + 5;
+                mode->VSyncEnd = fh + 15;
+                mode->VTotal = fh + 30;
+                mode->Clock = 162000000 / (fw + 200) / (fh + 30);
+                mode->status = MODE_OK;
+                mode->type = M_T_DRIVER;
+                mode->name = xnfalloc(32);
+                sprintf((char *)mode->name, "%ux%u", fw, fh);
+                mode->next = mode;
+                mode->prev = mode;
+            }
+            pScrn->modes = mode;
+            pScrn->currentMode = mode;
+
+            /* screen geometry required by xf86InitViewport/miScreenInit */
+            pScrn->virtualX = fw;
+            pScrn->virtualY = fh;
+            pScrn->displayWidth = fw;
+            pScrn->frameX0 = 0;
+            pScrn->frameY0 = 0;
+            pScrn->frameX1 = fw - 1;
+            pScrn->frameY1 = fh - 1;
+
+            xf86Msg(X_INFO, PRL_NAME ": mode %ux%u\n", fw, fh);
+        }
+    }
 
     if (iopl(3) < 0) {
         xf86Msg(X_ERROR, PRL_NAME ": iopl failed (need root)\n");
@@ -410,90 +486,25 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
         return FALSE;
     }
 
-    /* mode list: current + common VBE modes */
+    /* mode list replaced by live fb0 scanout size above */
+
+    /* standard DDX init sequence */
+    if (pScrn->xDpi == 0)
+        pScrn->xDpi = 96;
+    if (pScrn->yDpi == 0)
+        pScrn->yDpi = 96;
+    xf86SetDepthBpp(pScrn, pScrn->depth, pScrn->bitsPerPixel, 32, 32);
+    xf86SetDefaultVisual(pScrn, -1);
     {
-        static const unsigned short modes[][2] = {
-            {1600, 1200}, {1920, 1080}, {1280, 800}, {1280, 720}, {1024, 768}
-        };
-        DisplayModePtr mode, first = NULL, last = NULL;
-        int i;
-
-        pScrn->videoRam = 256 * 1024;
-        pScrn->bitsPerPixel = 32;
-        pScrn->depth = 24;
-        pScrn->defaultVisual = TrueColor;
-        pScrn->offset.red = 16;
-        pScrn->offset.green = 8;
-        pScrn->offset.blue = 0;
-        pScrn->mask.red = 0xff0000;
-        pScrn->mask.green = 0xff00;
-        pScrn->mask.blue = 0xff;
-        pScrn->rgbBits = 8;
-
-        for (i = 0; i < (int)(sizeof(modes) / sizeof(modes[0])); i++) {
-            mode = calloc(1, sizeof(DisplayModeRec));
-            if (!mode)
-                continue;
-            mode->HDisplay = modes[i][0];
-            mode->VDisplay = modes[i][1];
-            mode->HSyncStart = modes[i][0] + 40;
-            mode->HSyncEnd = modes[i][0] + 120;
-            mode->HTotal = modes[i][0] + 200;
-            mode->VSyncStart = modes[i][1] + 5;
-            mode->VSyncEnd = modes[i][1] + 15;
-            mode->VTotal = modes[i][1] + 30;
-            mode->Clock =  65000000 / (modes[i][0] + 200) / (modes[i][1] + 30) * ((modes[i][0]+200) * (modes[i][1]+30)) / ((modes[i][0]+200) * (modes[i][1]+30));
-            mode->status = MODE_OK;
-            mode->type = M_T_DRIVER;
-            mode->name = xnfalloc(32);
-            sprintf((char *)mode->name, "%dx%d", modes[i][0], modes[i][1]);
-
-            if (!first)
-                first = mode;
-            if (last)
-                last->next = mode;
-            mode->prev = last;
-            last = mode;
-
-            xf86Msg(X_INFO, PRL_NAME ": supported mode %ux%u\n",
-                    modes[i][0], modes[i][1]);
-        }
-        if (last)
-            last->next = first;
-        if (first)
-            first->prev = last;
-        pScrn->modes = first;
-        pScrn->currentMode = first;
-
-        /* screen geometry required by xf86InitViewport/miScreenInit */
-        if (first) {
-            pScrn->virtualX = first->HDisplay;
-            pScrn->virtualY = first->VDisplay;
-            pScrn->displayWidth = first->HDisplay;
-            pScrn->frameX0 = 0;
-            pScrn->frameY0 = 0;
-            pScrn->frameX1 = first->HDisplay - 1;
-            pScrn->frameY1 = first->VDisplay - 1;
-        }
-
-        /* standard DDX init sequence */
-        if (pScrn->xDpi == 0)
-            pScrn->xDpi = 96;
-        if (pScrn->yDpi == 0)
-            pScrn->yDpi = 96;
-        xf86SetDepthBpp(pScrn, pScrn->depth, pScrn->bitsPerPixel, 32, 32);
-        xf86SetDefaultVisual(pScrn, -1);
-        {
-            rgb zeros = { 0, 0, 0 };
-            Gamma gzeros = { 0.0, 0.0, 0.0 };
-            if (!xf86SetWeight(pScrn, zeros, zeros))
-                return FALSE;
-            if (!xf86SetGamma(pScrn, gzeros))
-                return FALSE;
-        }
-        xf86PrintModes(pScrn);
-        xf86SetCrtcForModes(pScrn, 0);
+        rgb zeros = { 0, 0, 0 };
+        Gamma gzeros = { 0.0, 0.0, 0.0 };
+        if (!xf86SetWeight(pScrn, zeros, zeros))
+            return FALSE;
+        if (!xf86SetGamma(pScrn, gzeros))
+            return FALSE;
     }
+    xf86PrintModes(pScrn);
+    xf86SetCrtcForModes(pScrn, 0);
     return TRUE;
 }
 
