@@ -933,9 +933,7 @@ prl_share_thread(void *arg)
          * this host — skip it */
         prl_send_set_mode(pPrl, pPrl->frame_w, pPrl->frame_h,
                           pPrl->frame_w * 4);
-        /* HWC OTG init crashes Xorg from this thread — disabled
-         * pending diagnosis (mouse-driver OTG works; video-thread
-         * OTG with {1,3} kills the server) */
+        prlm_hwc_init(pPrl);
         xf86Msg(X_INFO, PRL_NAME ": set-mode 0x8114 sent (%ux%u)\n",
                 pPrl->frame_w, pPrl->frame_h);
     }

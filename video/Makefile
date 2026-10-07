@@ -4,8 +4,8 @@ LDFLAGS = -shared
 
 all: prlvideo_drv.so
 
-prlvideo_drv.so: prlvideo.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+prlvideo_drv.so: prlvideo.c otg.c
+	$(CC) $(CFLAGS) -I. $(LDFLAGS) -o $@ prlvideo.c otg.c
 
 install: prlvideo_drv.so
 	cp prlvideo_drv.so /usr/lib/xorg/modules/drivers/
