@@ -26,6 +26,7 @@
 #include "xf86Cursor.h"
 #include "cursorstr.h"
 #include "randrstr.h"
+#include "extnsionst.h"
 #include <pthread.h>
 #include <sys/io.h>
 #include <sys/mman.h>
@@ -545,6 +546,50 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
     xf86PrintModes(pScrn);
     xf86SetCrtcForModes(pScrn, 0);
     return TRUE;
+}
+
+
+/* ---- ParallelsControl logging stub ----------------------------------
+ * prlcc (the X-session agent) talks to the DDX through this extension.
+ * Until the full protocol is implemented, log every request's wire
+ * format and answer with a generic success-shaped reply. */
+static int
+prl_ctl_proc(ClientPtr client)
+{
+    REQUEST(xReq);
+    unsigned len = (unsigned)client->req_len << 2;
+    const unsigned char *p = (const unsigned char *)stuff;
+    char hex[3 * 32 + 1];
+    unsigned i, n = len < 32 ? len : 32;
+
+    for (i = 0; i < n; i++)
+        snprintf(hex + i * 3, 4, "%02x ", p[i]);
+    xf86Msg(X_INFO, PRL_NAME ": PRLCTL minor=0x%x len=%u: %s\n",
+            stuff->data, len, hex);
+
+    /* generic reply, nonzero word at +8 (session-accepted shape) */
+    {
+        unsigned char rep[32];
+
+        memset(rep, 0, sizeof(rep));
+        rep[0] = X_Reply;
+        *(unsigned short *)(rep + 2) = (unsigned short)client->sequence;
+        *(unsigned *)(rep + 8) = 1;
+        WriteToClient(client, sizeof(rep), rep);
+    }
+    return Success;
+}
+
+static int
+prl_ctl_sproc(ClientPtr client)
+{
+    return prl_ctl_proc(client);
+}
+
+static void
+prl_ctl_close(ExtensionEntry *e)
+{
+    (void)e;
 }
 
 /* ---- share-state / cursor sender thread -------------------------------
@@ -1132,6 +1177,13 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
 
     pPrl->frame_w = pScrn->virtualX;
     pPrl->frame_h = pScrn->virtualY;
+
+    if (xf86ScreenToScrn(pScreen)->scrnIndex == 0 &&
+        !AddExtension("ParallelsControl", 0, 0, prl_ctl_proc,
+                      prl_ctl_sproc, prl_ctl_close, StandardMinorOpcode))
+        xf86Msg(X_WARNING, PRL_NAME ": ParallelsControl AddExtension failed\n");
+    else
+        xf86Msg(X_INFO, PRL_NAME ": ParallelsControl logging stub added\n");
 
     xf86Msg(X_INFO, PRL_NAME ": ScreenInit complete\n");
 
