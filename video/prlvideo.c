@@ -38,6 +38,8 @@
 
 #define PRL_VTG_PATH "/proc/driver/prl_vtg"
 
+static int prl_share_opt_saved;   /* read by prlmouse (weak import) */
+
 /* toolgate request/buffer wire format (verified against prl_tg kernel module) */
 typedef struct {
     unsigned Request, Status;
@@ -450,6 +452,7 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
         pPrl->share_opt = v && (!strcasecmp(v, "true") ||
                                 !strcasecmp(v, "on") ||
                                 !strcasecmp(v, "yes"));
+        prl_share_opt_saved = (int)pPrl->share_opt;
         xf86Msg(X_INFO, PRL_NAME ": ShareState option = %d (raw '%s')\n",
                 (int)pPrl->share_opt, v ? v : "(nil)");
     }
@@ -705,6 +708,12 @@ _X_EXPORT void prl_share_mouse_position(int x, int y)
 {
     prl_shared_mouse_x = x;
     prl_shared_mouse_y = y;
+}
+
+
+_X_EXPORT int prl_share_state_enabled(void)
+{
+    return prl_share_opt_saved;
 }
 
 /* ---- share-state / cursor sender thread -------------------------------
