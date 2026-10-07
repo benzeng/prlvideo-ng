@@ -44,6 +44,7 @@ typedef struct {
     unsigned short abs_x, abs_y, dim_w, dim_h;
     int last_buttons;
     int logged;
+    int fetch_logged;
     int evdev_active;
     volatile unsigned cell[2] __attribute__((aligned(8)));  /* host-written mouse cell */
     unsigned code, z;
@@ -119,13 +120,22 @@ prlm_sliding_enable(PrlMousePriv p)
         return -1;
     if (prlm_tis_register(p))
         return -2;
-    if (prlm_otg_req(p, 1))          /* enable */
+    if (prlm_otg_req(p, 1))          /* attach */
         return -3;
-    if (prlm_otg_req(p, 7))          /* proto version query */
-        return -4;
-    r = (unsigned *)p->evbuf;
-    p->batch = (int)r[3] != 0;
-    p->sliding_on = 1;
+    /* the ATTACH reply carries sm_ver at +0x14 (LAB_1000d7c2b);
+     * the cmd-7 reply is empty */
+    {
+        unsigned smv = ((unsigned *)p->evbuf)[5];
+
+        if (prlm_otg_req(p, 7))      /* abs-flag on (the original's
+                                        'version query' is really this) */
+            return -4;
+        r = (unsigned *)p->evbuf;
+        p->batch = (int)smv != 0;
+        p->sliding_on = 1;
+        xf86Msg(X_INFO, PRLM_NAME ": sm_ver=%u batch=%d\n", smv,
+                p->batch);
+    }
 
     /* console session completion (host FUN_1000d7af0): without these
      * the console never activates — dims stay 0, HWC stays unsupported,
@@ -158,6 +168,74 @@ prlm_sliding_enable(PrlMousePriv p)
 
     }
     return 0;
+}
+
+/* batch fetch: 44-byte event records {flags,_,_,buttons,X,Y,Z,W,_,w,h}
+ * flags bit0 = absolute; this is the tablet-queue reader — without it
+ * the host's absolute delivery has no consumer and input dies */
+static int
+prlm_sliding_fetch(PrlMousePriv p, InputInfoPtr pInfo)
+{
+    unsigned char *b = p->evbuf;
+    unsigned *q = (unsigned *)b;
+    uint32_t actual;
+    int rc, n, i;
+
+    memset(b, 0, 0x44);
+    q[0] = 1; q[2] = 8; q[3] = 0; q[4] = 1; q[5] = 0xfd0;
+    rc = otg_request(&p->link, b, 0x44, 0xfd0, &actual);
+    if (p->fetch_logged < 8) {
+        p->fetch_logged++;
+        xf86Msg(X_INFO, PRLM_NAME ": fetch rc=%d actual=%u st=0x%x dlen=0x%x\n",
+                rc, actual, q[1], q[5]);
+    }
+    if (rc)
+        return -1;
+    {
+        uint32_t dlen = q[5];
+
+        if (dlen == 0 || dlen > 0xfd0)
+            return 0;
+        n = dlen / 0x2c;
+        for (i = 0; i < n; i++) {
+            unsigned *e = (unsigned *)(b + 0x18 + i * 0x2c);
+            int absolute = (e[0] & 1) != 0;
+            unsigned buttons = e[3];
+            int x = (int)e[4], y = (int)e[5];
+            int z = (int)e[6], w = (int)e[7];
+            static int last_btn;
+
+            if (p->logged < 10) {
+                p->logged++;
+                xf86Msg(X_INFO, PRLM_NAME ": ev abs=%d btn=0x%x x=%d y=%d z=%d dims=%dx%d\n",
+                        absolute, buttons, x, y, z, (int)e[9], (int)e[10]);
+            }
+            if (absolute && pInfo) {
+                ScreenPtr scr = miPointerGetScreen(pInfo->dev);
+
+                if (scr) {
+                    x -= scr->x;
+                    y -= scr->y;
+                }
+                xf86PostMotionEvent(pInfo->dev, TRUE, 0, 2, x, y);
+            }
+            if (buttons != (unsigned)last_btn) {
+                int bi;
+
+                for (bi = 1; bi <= 8; bi++) {
+                    int mask = (buttons >> (bi - 1)) & 1;
+                    int old = (last_btn >> (bi - 1)) & 1;
+
+                    if (mask != old)
+                        xf86PostButtonEvent(pInfo->dev, FALSE, bi,
+                                            mask != 0, 0, 0);
+                }
+                last_btn = buttons;
+            }
+            (void)z; (void)w;
+        }
+    }
+    return n;
 }
 
 /* poll host state; returns 0 and fills dims/abs when served */
@@ -235,9 +313,11 @@ prlm_wakeup_timer(OsTimerPtr timer, CARD32 now, pointer arg)
 
     (void)timer; (void)now;
     if (p && p->sliding_on && !p->evdev_active) {
-        int prc = 0;   /* OTG from the MAIN thread stalls the loop —
-                          polls only happen in read_input (input thread) */
-        p->dim_w = p->dim_w;  /* keep fields untouched */
+        /* batch fetch is the tablet-queue reader; it must run even
+         * when evdev is silent. Main-thread OTG was believed to stall,
+         * but the timer runs in the dispatch loop between requests —
+         * and without this reader the host's absolute delivery dies */
+        int prc = p->batch ? prlm_sliding_fetch(p, pInfo) : 0;
 
         if (p && p->logged < 6) {
             p->logged++;
@@ -377,7 +457,9 @@ prlm_read_input(InputInfoPtr pInfo)
             xf86PostMotionEvent(pInfo->dev, FALSE, 3, 1, dw);
     }
 
-    if (p && p->sliding_on && prlm_sliding_poll(p) == 0 &&
+    if (p && p->batch)
+        prlm_sliding_fetch(p, pInfo);
+    if (p && !p->batch && p->sliding_on && prlm_sliding_poll(p) == 0 &&
         p->dim_w > 1 && p->dim_h > 1) {
         int x = p->abs_x, y = p->abs_y;
         ScreenPtr scr = miPointerGetScreen(pInfo->dev);
