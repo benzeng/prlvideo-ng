@@ -88,6 +88,9 @@ typedef struct {
     ssize_t last_write_rc;
     int last_write_errno;
     unsigned frame_w, frame_h;   /* full-frame reannounce bounds */
+    Bool dynres_enabled;         /* prlcc 0x17 */
+    Bool vt_active;              /* prlcc 0x1c: X owns the active VT */
+    Bool share_opt;              /* Option ShareState, parsed in PreInit */
 
     DamagePtr damage;
     xf86CursorInfoPtr cursor_info;
@@ -421,6 +424,29 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
     if (!pPrl) return FALSE;
     pScrn->driverPrivate = pPrl;
     pthread_mutex_init(&pPrl->lock, NULL);
+    /* pull Device-section options straight from the entities
+     * (xf86CollectOptions dereferences monitor/confScreen unconditionally) */
+    {
+        int i;
+
+        pScrn->options = NULL;
+        for (i = 0; i < pScrn->numEntities; i++) {
+            GDevPtr dev = xf86GetDevFromEntity(pScrn->entityList[i],
+                                                pScrn->entityInstanceList[i]);
+            if (dev && dev->options)
+                pScrn->options = xf86OptionListMerge(
+                    pScrn->options, xf86OptionListDuplicate(dev->options));
+        }
+    }
+    {
+        const char *v = pScrn->options ?
+            xf86FindOptionValue(pScrn->options, "ShareState") : NULL;
+        pPrl->share_opt = v && (!strcasecmp(v, "true") ||
+                                !strcasecmp(v, "on") ||
+                                !strcasecmp(v, "yes"));
+        xf86Msg(X_INFO, PRL_NAME ": ShareState option = %d (raw '%s')\n",
+                (int)pPrl->share_opt, v ? v : "(nil)");
+    }
 
     pPrl->vtg_fd = open(PRL_VTG_PATH, O_WRONLY);
     pPrl->vtg_mmap_fd = open(PRL_VTG_PATH, O_RDWR);
@@ -549,35 +575,107 @@ PrlPreInit(ScrnInfoPtr pScrn, int flags)
 }
 
 
-/* ---- ParallelsControl logging stub ----------------------------------
- * prlcc (the X-session agent) talks to the DDX through this extension.
- * Until the full protocol is implemented, log every request's wire
- * format and answer with a generic success-shaped reply. */
+/* ---- ParallelsControl extension -------------------------------------
+ * The DDX<->prlcc control plane.  Server-side semantics from the
+ * decompiled original dispatcher (FUN_001158d0); requests observed live
+ * from prlcc on our stub.  All query replies: 32 bytes
+ * {type=1, seq@2, length=0, value@8}. */
+static Bool
+prl_rr_set_size(ScreenPtr pScreen, CARD16 width, CARD16 height,
+                CARD32 mmWidth, CARD32 mmHeight);
+static int
+prl_ctl_reply_val(ClientPtr client, unsigned value)
+{
+    unsigned char rep[32];
+
+    memset(rep, 0, sizeof(rep));
+    rep[0] = X_Reply;
+    *(unsigned short *)(rep + 2) = (unsigned short)client->sequence;
+    *(unsigned *)(rep + 8) = value;
+    WriteToClient(client, sizeof(rep), rep);
+    return Success;
+}
+
 static int
 prl_ctl_proc(ClientPtr client)
 {
+    ScrnInfoPtr pScrn = xf86Screens[0];
+    PrlPtr pPrl = pScrn->driverPrivate;
+
     REQUEST(xReq);
-    unsigned len = (unsigned)client->req_len << 2;
-    const unsigned char *p = (const unsigned char *)stuff;
-    char hex[3 * 32 + 1];
-    unsigned i, n = len < 32 ? len : 32;
+    switch (stuff->data) {
+    case 0x1d:                      /* session register {uid} */
+        REQUEST_AT_LEAST_SIZE(xReq);
+        return prl_ctl_reply_val(client, 1);
+    case 0x17:                      /* dynres enable {uid, flag@8} */
+        if (client->req_len < 3)
+            return BadLength;
+        pPrl->dynres_enabled = *(unsigned *)((char *)stuff + 8) != 0;
+        return prl_ctl_reply_val(client, 1);
+    case 0x18:                      /* dynres query */
+        return prl_ctl_reply_val(client, pPrl->dynres_enabled);
+    case 0x1c:                      /* ping: 0 makes prlcc suspend */
+        return prl_ctl_reply_val(client, 1);
+    case 0x01: {                    /* DynRes set size {W@4, H@8} */
+        int w, h;
 
-    for (i = 0; i < n; i++)
-        snprintf(hex + i * 3, 4, "%02x ", p[i]);
-    xf86Msg(X_INFO, PRL_NAME ": PRLCTL minor=0x%x len=%u: %s\n",
-            stuff->data, len, hex);
-
-    /* generic reply, nonzero word at +8 (session-accepted shape) */
-    {
-        unsigned char rep[32];
-
-        memset(rep, 0, sizeof(rep));
-        rep[0] = X_Reply;
-        *(unsigned short *)(rep + 2) = (unsigned short)client->sequence;
-        *(unsigned *)(rep + 8) = 1;
-        WriteToClient(client, sizeof(rep), rep);
+        if (client->req_len < 3)
+            return BadLength;
+        w = *(int *)((char *)stuff + 4);
+        h = *(int *)((char *)stuff + 8);
+        xf86Msg(X_INFO, PRL_NAME ": prlcc dynres set %dx%d\n", w, h);
+        if (w >= 640 && w <= 2560 && h >= 480 && h <= 1600 &&
+            (w != pScrn->virtualX || h != pScrn->virtualY))
+            prl_rr_set_size(pScrn->pScreen, w, h, 0, 0);
+        return prl_ctl_reply_val(client, 1);
     }
-    return Success;
+    case 0x11: {                    /* per-head resize {head@4, w@8, h@0xc} */
+        int w, h;
+
+        if (client->req_len < 4)
+            return BadLength;
+        w = *(int *)((char *)stuff + 8);
+        h = *(int *)((char *)stuff + 12);
+        xf86Msg(X_INFO, PRL_NAME ": prlcc resize %dx%d\n", w, h);
+        if (w >= 640 && w <= 2560 && h >= 480 && h <= 1600)
+            prl_rr_set_size(pScrn->pScreen, w, h, 0, 0);
+        return prl_ctl_reply_val(client, 1);
+    }
+    case 0x1b:                      /* hardware cursor reinit (UT 0x14) */
+        xf86Msg(X_INFO, PRL_NAME ": prlcc requests cursor reinit\n");
+        return prl_ctl_reply_val(client, 1);
+    case 0x1a:                      /* coherence active query */
+    case 0x09:                      /* coherence agent status */
+    case 0x24:                      /* coherence tracking start */
+        return prl_ctl_reply_val(client, 1);
+    case 0x20:                      /* coherence param query */
+        return prl_ctl_reply_val(client, 1);
+    case 0x0e: {                    /* get visual id {a@4, depth@8} */
+        unsigned depth = *(unsigned *)((char *)stuff + 8);
+        VisualPtr v;
+        int i;
+
+        for (i = 0; i < pScrn->pScreen->numVisuals; i++) {
+            v = &pScrn->pScreen->visuals[i];
+            if (v->class == TrueColor &&
+                (depth == 24 || v->nplanes == depth)) {
+                return prl_ctl_reply_val(client, v->vid);
+            }
+        }
+        return prl_ctl_reply_val(client, pScrn->pScreen->visuals[0].vid);
+    }
+    case 0x25:                      /* window coherent? {win@4} */
+        return prl_ctl_reply_val(client, 0);
+    case 0x23:                      /* coherence enable (fire-and-forget) */
+    case 0x19:                      /* coherence register */
+    case 0x12:                      /* heads config */
+    case 0x26:                      /* output disconnect/reconnect */
+        return Success;
+    default:
+        xf86Msg(X_INFO, PRL_NAME ": PRLCTL unhandled minor=0x%x len=%u\n",
+                stuff->data, (unsigned)client->req_len << 2);
+        return prl_ctl_reply_val(client, 0);
+    }
 }
 
 static int
@@ -1149,9 +1247,25 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
      * OPT-IN ONLY: the probe traffic itself switches the host display
      * pipeline from continuous scanout into tools-managed mode, and
      * without a working repaint path that freezes the picture. */
+    /* pull Device-section options straight from the entities
+     * (xf86CollectOptions dereferences monitor/confScreen unconditionally) */
+    {
+        int i;
+
+        pScrn->options = NULL;
+        for (i = 0; i < pScrn->numEntities; i++) {
+            GDevPtr dev = xf86GetDevFromEntity(pScrn->entityList[i],
+                                                pScrn->entityInstanceList[i]);
+            if (dev && dev->options)
+                pScrn->options = xf86OptionListMerge(
+                    pScrn->options, xf86OptionListDuplicate(dev->options));
+        }
+    }
     {
         const char *v = pScrn->options ?
             xf86FindOptionValue(pScrn->options, "ShareState") : NULL;
+        xf86Msg(X_INFO, PRL_NAME ": ShareState option raw = '%s' (options=%p)\n",
+                v ? v : "(null)", (void *)pScrn->options);
         Bool share_state = v && (!strcasecmp(v, "true") ||
                                  !strcasecmp(v, "on") ||
                                  !strcasecmp(v, "yes"));
@@ -1253,6 +1367,8 @@ PrlEnterVT(ScrnInfoPtr pScrn)
 {
     PrlPtr pPrl = pScrn->driverPrivate;
 
+    pPrl->vt_active = TRUE;
+
     /* the console owned the scanout while we were away; reannounce the
      * whole frame so the host picks our framebuffer up again */
     pthread_mutex_lock(&pPrl->lock);
@@ -1270,8 +1386,9 @@ PrlEnterVT(ScrnInfoPtr pScrn)
 static void
 PrlLeaveVT(ScrnInfoPtr pScrn)
 {
-    /* scanout returns to the kernel console; nothing to undo */
-    (void)pScrn;
+    PrlPtr pPrl = pScrn->driverPrivate;
+
+    pPrl->vt_active = FALSE;
 }
 
 static void
