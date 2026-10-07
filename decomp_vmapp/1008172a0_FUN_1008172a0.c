@@ -1,0 +1,16 @@
+
+undefined4 FUN_1008172a0(long param_1,undefined4 *param_2)
+
+{
+  undefined4 uVar1;
+  
+  uVar1 = 0;
+  if (param_1 != 0) {
+    if (param_2 != (undefined4 *)0x0) {
+      *param_2 = *(undefined4 *)(param_1 + 0x54);
+    }
+    uVar1 = *(undefined4 *)(param_1 + 0x50);
+  }
+  return uVar1;
+}
+

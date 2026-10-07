@@ -1,0 +1,9 @@
+
+void FUN_100698180(long param_1)
+
+{
+  FUN_100698030(param_1,&PTR_PTR_100bcc2e0);
+  FUN_100684e00(param_1 + 0x180f8);
+  return;
+}
+

@@ -1,0 +1,18 @@
+
+void FUN_1003810c0(undefined8 *param_1)
+
+{
+  char cVar1;
+  
+  *param_1 = &PTR_FUN_100bbcf90;
+  cVar1 = (*DAT_1011c6360)(*(undefined4 *)(param_1 + 2));
+  if (cVar1 != '\0') {
+    (*DAT_1011c5738)(0x8d40,*(undefined4 *)(param_1 + 2));
+    (*DAT_1011c5de8)(0x8d40,0x8d00,0xde1,0,0);
+    (*DAT_1011c5de8)(0x8d40,0x8d20,0xde1,0,0);
+    (*DAT_1011c5b20)(1,param_1 + 2);
+  }
+  operator_delete(param_1);
+  return;
+}
+

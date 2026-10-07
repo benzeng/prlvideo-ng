@@ -1,0 +1,21 @@
+
+void * FUN_10087d0e0(void *param_1,ulong param_2)
+
+{
+  void *pvVar1;
+  
+  pvVar1 = (void *)0x0;
+  if ((param_1 != (void *)0x0) && (param_2 < 0x7fffffff)) {
+    pvVar1 = (void *)FUN_10081ddd0((int)param_2 + 1,"buf_str.c",0x51);
+    if (pvVar1 == (void *)0x0) {
+      FUN_100887ce0(7,0x68,0x41,"buf_str.c",0x53);
+      pvVar1 = (void *)0x0;
+    }
+    else {
+      _memcpy(pvVar1,param_1,param_2);
+      *(undefined1 *)((long)pvVar1 + param_2) = 0;
+    }
+  }
+  return pvVar1;
+}
+

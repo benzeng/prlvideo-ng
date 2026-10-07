@@ -1,0 +1,248 @@
+openjdk version "25.0.4.1" 2026-08-18
+OpenJDK Runtime Environment (build 25.0.4.1+1-1-Debian)
+OpenJDK 64-Bit Server VM (build 25.0.4.1+1-1-Debian, mixed mode)
+INFO  Using log config file: jar:file:/usr/share/ghidra/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /root/.config/ghidra/ghidra_12.1.3_DEV/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /root/.config/ghidra/ghidra_12.1.3_DEV/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (1658 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Starting cache cleanup: /var/tmp/root-ghidra/fscache2 (FileCacheMaintenanceDaemon)  
+INFO  Finished cache cleanup, estimated storage used: 0 (FileCacheMaintenanceDaemon)  
+INFO  Headless startup complete (5061 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::staticFieldOffset has been called by org.apache.felix.framework.util.SecureAction (file:/usr/share/ghidra/Ghidra/Features/Base/lib/org.apache.felix.framework-7.0.5.jar)
+WARNING: Please consider reporting this to the maintainers of class org.apache.felix.framework.util.SecureAction
+WARNING: sun.misc.Unsafe::staticFieldOffset will be removed in a future release
+INFO  HEADLESS Script Paths:
+    /usr/share/ghidra/Ghidra/Processors/8051/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/BytePatterns/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/FileFormats/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/Base/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/PDB/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/Atmel/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/JVM/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/DATA/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/BSim/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/PyGhidra/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/Decompiler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/FunctionID/ghidra_scripts
+    /tmp
+    /usr/share/ghidra/Ghidra/Features/VersionTracking/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Debug/Debugger/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/PIC/ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Creating project: /home/dong/prlvideo-ng/ghidra_proj/vmapp (HeadlessAnalyzer)  
+INFO  Creating project: /home/dong/prlvideo-ng/ghidra_proj/vmapp (DefaultProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: /home/dong/prlvideo-ng/ghidra_proj/vmapp (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///home/dong/prlvideo-ng/prl_vm_app (HeadlessAnalyzer)  
+INFO  Using Loader: Mac OS X Mach-O (ProgramLoader)  
+INFO  Using Language/Compiler: x86:LE:64:default:gcc (ProgramLoader)  
+INFO  Using Library Search Path: [., /bin, /lib, /lib64, /lib/x86_64-linux-gnu, /lib/aarch64-linux-gnu, /usr/bin, /usr/lib, /usr/X11R6/bin, /usr/X11R6/lib, /usr/java/packages/lib, /usr/lib/x86_64-linux-gnu/jni, /usr/lib/x86_64-linux-gnu, /usr/lib/jni] (ProgramLoader)  
+INFO  Additional info:
+Loading file:///home/dong/prlvideo-ng/prl_vm_app?MD5=d1c26ada5d37e05de7704aa94f96667c...
+------------------------------------------------
+
+Linking the External Programs of 'prl_vm_app' to imported libraries...
+  [/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices] -> not found in project
+  [/System/Library/Frameworks/Security.framework/Versions/A/Security] -> not found in project
+  [/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation] -> not found in project
+  [/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit] -> not found in project
+  [/System/Library/Frameworks/DirectoryService.framework/Versions/A/DirectoryService] -> not found in project
+  [/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation] -> not found in project
+  [/System/Library/Frameworks/DiskArbitration.framework/Versions/A/DiskArbitration] -> not found in project
+  [/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC] -> not found in project
+  [/usr/lib/libSystem.B.dylib] -> not found in project
+  [/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices] -> not found in project
+  [/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation] -> not found in project
+  [/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia] -> not found in project
+  [/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration] -> not found in project
+  [/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio] -> not found in project
+  [/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL] -> not found in project
+  [/System/Library/Frameworks/IOSurface.framework/Versions/A/IOSurface] -> not found in project
+  [/System/Library/Frameworks/IOBluetooth.framework/Versions/A/IOBluetooth] -> not found in project
+  [/System/Library/Frameworks/AudioUnit.framework/Versions/A/AudioUnit] -> not found in project
+  [/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox] -> not found in project
+  [/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon] -> not found in project
+  [/System/Library/Frameworks/Cocoa.framework/Versions/A/Cocoa] -> not found in project
+  [/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate] -> not found in project
+  [/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore] -> not found in project
+  [@rpath/libPrlXmlModel.1.dylib] -> not found in project
+  [/usr/lib/libz.1.dylib] -> not found in project
+  [@rpath/QtGui.framework/Versions/5/QtGui] -> not found in project
+  [@rpath/QtCore.framework/Versions/5/QtCore] -> not found in project
+  [@rpath/QtNetwork.framework/Versions/5/QtNetwork] -> not found in project
+  [@rpath/QtXml.framework/Versions/5/QtXml] -> not found in project
+  [@rpath/QtScript.framework/Versions/5/QtScript] -> not found in project
+  [@rpath/QtSql.framework/Versions/5/QtSql] -> not found in project
+  [@rpath/QtConcurrent.framework/Versions/5/QtConcurrent] -> not found in project
+  [/System/Library/Frameworks/AGL.framework/Versions/A/AGL] -> not found in project
+  [/usr/lib/libc++.1.dylib] -> not found in project
+  [/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit] -> not found in project
+  [/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics] -> not found in project
+  [/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo] -> not found in project
+  [/System/Library/Frameworks/ImageIO.framework/Versions/A/ImageIO] -> not found in project
+  [/usr/lib/libobjc.A.dylib] -> not found in project
+------------------------------------------------
+
+ (ProgramLoader)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  ANALYZING all memory and code: file:///home/dong/prlvideo-ng/prl_vm_app (HeadlessAnalyzer)  
+INFO  hit non-returning function, restarting decompiler switch analyzer later (DecompilerSwitchAnalyzer)  
+ERROR Unexpected exception getting Decompiler result (InternalResultListener) java.util.concurrent.ExecutionException: java.lang.ArrayIndexOutOfBoundsException: Index 2 out of bounds for length 2
+	at java.base/java.util.concurrent.FutureTask.report(FutureTask.java:124)
+	at java.base/java.util.concurrent.FutureTask.get(FutureTask.java:193)
+	at generic.concurrent.QResult.<init>(QResult.java:40)
+	at generic.concurrent.FutureTaskMonitor.run(FutureTaskMonitor.java:77)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+Caused by: java.lang.ArrayIndexOutOfBoundsException: Index 2 out of bounds for length 2
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer.findMessages(ObjcMessageAnalyzer.java:325)
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer.fixMsgSendCalls(ObjcMessageAnalyzer.java:370)
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer$1.process(ObjcMessageAnalyzer.java:148)
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer$1.process(ObjcMessageAnalyzer.java:145)
+	at ghidra.app.decompiler.parallel.DecompilerCallback.process(DecompilerCallback.java:80)
+	at ghidra.app.decompiler.parallel.DecompilerCallback.process(DecompilerCallback.java:41)
+	at generic.concurrent.ConcurrentQ$CallbackCallable.call(ConcurrentQ.java:706)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:328)
+	at generic.concurrent.FutureTaskMonitor.run(FutureTaskMonitor.java:75)
+	... 3 more
+ 
+INFO  Packed database cache: /var/tmp/root-ghidra/packed-db-cache (PackedDatabaseCache)  
+INFO  Multiple function definitions for cb at 100254a10 found.  No function signature applied. (ApplyFunctionDataTypesCmd)  
+INFO  Applied data type archive: mac_osx (ApplyDataArchiveAnalyzer)  
+WARN  Unable to fully apply external demangled Address Table at 101258500: BootDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258600: QTcpServer::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258700: CVmHardDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258800: CVmUsbDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258900: CVmFloppyDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258a00: CVmSerialPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258b00: CProblemReport::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258c00: CVmOpticalDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258d00: CVmSoundDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258e00: CVmParallelPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101258f00: CVmConfiguration::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259000: QCoreApplication::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259100: CVmGenericScsiDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259200: CVmMassStorageDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259300: CVmGenericNetworkAdapter::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259400: QEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259500: QObject::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259600: QThread::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259700: CVmDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259800: QIODevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259900: std::__shared_weak_count::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259a00: char_const*::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259b00: std::out_of_range::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259c00: std::runtime_error::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259d00: std::bad_alloc::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259e00: std::exception::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 101259f00: bool::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a000: int::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a100: CHwHddPartition::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a200: CVmConfiguration::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a300: __cxxabiv1::__enum_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a400: __cxxabiv1::__class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a500: __cxxabiv1::__si_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a600: __cxxabiv1::__vmi_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a700: std::out_of_range::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a800: std::bad_alloc::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10125a900: std::exception::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::BootDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtNetwork.framework/Versions/5/QtNetwork::QTcpServer::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmHardDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmUsbDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmFloppyDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmSerialPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CProblemReport::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmOpticalDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmSoundDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmParallelPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmConfiguration::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QCoreApplication::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmGenericScsiDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmMassStorageDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmGenericNetworkAdapter::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QObject::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QThread::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QIODevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::__shared_weak_count::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::char_const*::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::out_of_range::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::runtime_error::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::bad_alloc::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::exception::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::bool::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::int::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CHwHddPartition::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmConfiguration::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__enum_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__si_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__vmi_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::out_of_range::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::bad_alloc::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::exception::vtable (DemangledAddressTable)  
+INFO  -----------------------------------------------------
+    ASCII Strings                              5.511 secs
+    Apply Data Archives                        2.982 secs
+    CFStrings                                  0.152 secs
+    Call Convention ID                        36.419 secs
+    Call-Fixup Installer                       5.082 secs
+    Create Address Tables                      9.492 secs
+    Create Address Tables - One Time           9.735 secs
+    Create Function                           16.856 secs
+    Data Reference                            10.211 secs
+    Decompiler Switch Analysis               123.259 secs
+    Decompiler Switch Analysis - One Time     23.643 secs
+    Demangler GNU                              8.226 secs
+    Disassemble                               60.144 secs
+    Disassemble Entry Points                  20.403 secs
+    Disassemble Entry Points - One Time        0.027 secs
+    Embedded Media                             0.637 secs
+    External Entry References                  0.031 secs
+    Function ID                               36.206 secs
+    Function Start Pre Search                  0.626 secs
+    Function Start Search                      2.545 secs
+    Function Start Search After Code           4.410 secs
+    Function Start Search After Data           4.975 secs
+    Mach-O Function Starts                     1.855 secs
+    Non-Returning Functions - Discovered      18.982 secs
+    Non-Returning Functions - Known            0.066 secs
+    Objective-C Message Analyzer             162.484 secs
+    Objective-C Type Metadata Analyzer         2.763 secs
+    Reference                                  8.799 secs
+    Scalar Operand References                 39.040 secs
+    Shared Return Calls                       11.412 secs
+    Stack                                    253.226 secs
+    Subroutine References                      4.768 secs
+    Subroutine References - One Time           0.003 secs
+    x86 Constant Reference Analyzer          202.713 secs
+-----------------------------------------------------
+     Total Time   1087 secs
+-----------------------------------------------------
+ (AutoAnalysisManager)  
+INFO  REPORT: Analysis succeeded for file: file:///home/dong/prlvideo-ng/prl_vm_app (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: GhidraDecompVmapp.java  (HeadlessAnalyzer)  
+INFO  SCRIPT: /tmp/GhidraDecompVmapp.java (HeadlessAnalyzer)  
+INFO  GhidraDecompVmapp.java> DECOMPILED_VMAPP=25472 (GhidraScript)  
+INFO  ANALYZING changes made by post scripts: file:///home/dong/prlvideo-ng/prl_vm_app (HeadlessAnalyzer)  
+INFO  REPORT: Post-analysis succeeded for file: file:///home/dong/prlvideo-ng/prl_vm_app (HeadlessAnalyzer)  
+INFO  /prl_vm_app: file created (root) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /prl_vm_app (vmapp:/prl_vm_app) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  

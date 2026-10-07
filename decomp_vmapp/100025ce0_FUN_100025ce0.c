@@ -1,0 +1,12 @@
+
+void FUN_100025ce0(long param_1,undefined8 param_2,long *param_3,int param_4)
+
+{
+  if (*(char *)(param_1 + 0x48) != '\0') {
+    FUN_1004c2f50(*(undefined8 *)(param_1 + 0x50),**(undefined4 **)(*param_3 + 0x10),
+                  *(undefined4 **)(*param_3 + 0x10) + 1,param_4 + -4,1,0);
+    return;
+  }
+  return;
+}
+

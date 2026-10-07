@@ -1,0 +1,11 @@
+
+undefined8 * FUN_100768c40(undefined8 *param_1)
+
+{
+  undefined8 uVar1;
+  
+  uVar1 = QString::fromAscii_helper("Mac",3);
+  *param_1 = uVar1;
+  return param_1;
+}
+

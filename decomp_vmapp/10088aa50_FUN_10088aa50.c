@@ -1,0 +1,36 @@
+
+undefined8 FUN_10088aa50(long *param_1)
+
+{
+  int iVar1;
+  
+  if (*param_1 != 0) {
+    if (*(long *)(*param_1 + 0x38) != 0) {
+      iVar1 = FUN_100894750(param_1,2);
+      if (iVar1 == 0) {
+        (**(code **)(*param_1 + 0x38))(param_1);
+      }
+    }
+    if (((*param_1 != 0) && (*(int *)(*param_1 + 0x68) != 0)) && (param_1[3] != 0)) {
+      iVar1 = FUN_100894750(param_1,4);
+      if (iVar1 == 0) {
+        _OPENSSL_cleanse((void *)param_1[3],(long)*(int *)(*param_1 + 0x68));
+        FUN_10081e1a0(param_1[3]);
+      }
+    }
+  }
+  if (param_1[4] != 0) {
+    FUN_1008963e0();
+  }
+  if (param_1[1] != 0) {
+    FUN_10087a5e0();
+  }
+  param_1[5] = 0;
+  param_1[4] = 0;
+  param_1[3] = 0;
+  param_1[2] = 0;
+  param_1[1] = 0;
+  *param_1 = 0;
+  return 1;
+}
+

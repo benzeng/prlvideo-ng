@@ -1,0 +1,67 @@
+
+undefined8 FUN_10060f9c0(undefined8 param_1,undefined8 *param_2)
+
+{
+  QString QVar1;
+  char cVar2;
+  QArrayData *local_28;
+  QString local_20;
+  undefined1 local_11;
+  
+  local_20.field0_0x0 = (QTypedArrayData<unsigned_short> *)*param_2;
+  if (1 < *(int *)local_20.field0_0x0 + 1U) {
+    LOCK();
+    *(int *)local_20.field0_0x0 = *(int *)local_20.field0_0x0 + 1;
+    local_11 = *(int *)local_20.field0_0x0 != 0;
+    UNLOCK();
+  }
+  QString::append(&local_20);
+  cVar2 = QFile::exists(&local_20);
+  if ((cVar2 == '\0') ||
+     (cVar2 = QFile::remove(&local_20), QVar1.field0_0x0 = local_20.field0_0x0, cVar2 != '\0'))
+  goto LAB_10060fabf;
+  if (1 < *(int *)local_20.field0_0x0 + 1U) {
+    LOCK();
+    *(int *)local_20.field0_0x0 = *(int *)local_20.field0_0x0 + 1;
+    local_11 = *(int *)local_20.field0_0x0 != 0;
+    UNLOCK();
+  }
+  QString::toLocal8Bit();
+  FUN_1008e3970("","crypt",0,"Can\'t remove entry %s",local_28 + *(long *)(local_28 + 0x10));
+  if (*(int *)local_28 != -1) {
+    if (*(int *)local_28 != 0) {
+      LOCK();
+      *(int *)local_28 = *(int *)local_28 + -1;
+      local_11 = *(int *)local_28 != 0;
+      UNLOCK();
+      if ((bool)local_11) goto LAB_10060fa8f;
+    }
+    QArrayData::deallocate(local_28,1,8);
+  }
+LAB_10060fa8f:
+  if (*(int *)QVar1.field0_0x0 != -1) {
+    if (*(int *)QVar1.field0_0x0 != 0) {
+      LOCK();
+      *(int *)QVar1.field0_0x0 = *(int *)QVar1.field0_0x0 + -1;
+      local_11 = *(int *)QVar1.field0_0x0 != 0;
+      UNLOCK();
+      if ((bool)local_11) goto LAB_10060fabf;
+    }
+    QArrayData::deallocate((QArrayData *)QVar1.field0_0x0,2,8);
+  }
+LAB_10060fabf:
+  if (*(int *)local_20.field0_0x0 != -1) {
+    if (*(int *)local_20.field0_0x0 != 0) {
+      LOCK();
+      *(int *)local_20.field0_0x0 = *(int *)local_20.field0_0x0 + -1;
+      UNLOCK();
+      if (*(int *)local_20.field0_0x0 != 0) {
+        return 0;
+      }
+      local_11 = 0;
+    }
+    QArrayData::deallocate((QArrayData *)local_20.field0_0x0,2,8);
+  }
+  return 0;
+}
+

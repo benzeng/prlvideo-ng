@@ -1,0 +1,110 @@
+
+void FUN_1000da950(undefined4 *param_1,undefined8 param_2,undefined1 param_3)
+
+{
+  long lVar1;
+  char cVar2;
+  byte local_30;
+  
+  param_1[1] = 0x18c;
+  *(undefined1 *)(param_1 + 2) = param_3;
+  *(undefined1 *)((long)param_1 + 9) = 0;
+  *param_1 = 0x54534548;
+  *(undefined2 *)((long)param_1 + 0xe) = 0x2020;
+  *(undefined4 *)((long)param_1 + 10) = 0x534c5250;
+  *(undefined8 *)(param_1 + 4) = 0x4d454f5f534c5250;
+  param_1[6] = 1;
+  param_1[7] = 0x4c544e49;
+  param_1[8] = 0x20051216;
+  param_1[9] = 5;
+  FUN_1000dacf0(param_1 + 10);
+  *(undefined1 *)((long)param_1 + 0x6e) = 0;
+  *(undefined2 *)(param_1 + 0x1b) = 0;
+  param_1[0x1a] = 0;
+  *(undefined1 *)((long)param_1 + 0x6f) = 1;
+  param_1[0x1c] = 1;
+  param_1[0x1d] = 1;
+  *(undefined1 *)((long)param_1 + 0xbd) = 0;
+  *(undefined2 *)((long)param_1 + 0xbb) = 0;
+  *(undefined4 *)((long)param_1 + 0xb7) = 0;
+  *(ulong *)((long)param_1 + 0xaf) = (ulong)local_30;
+  *(undefined8 *)(param_1 + 0x20) = 0;
+  *(undefined8 *)(param_1 + 0x1e) = 0;
+  *(undefined1 *)(param_1 + 0x22) = 1;
+  *(undefined1 *)((long)param_1 + 0x8f) = 0;
+  *(undefined2 *)((long)param_1 + 0x8d) = 0;
+  *(undefined4 *)((long)param_1 + 0x89) = 0;
+  *(undefined2 *)(param_1 + 0x2b) = 1;
+  *(undefined2 *)(param_1 + 0x2c) = 0;
+  *(undefined1 *)((long)param_1 + 0xb2) = 0;
+  *(undefined2 *)((long)param_1 + 0xae) = 0;
+  *(undefined1 *)((long)param_1 + 0xb3) = 1;
+  param_1[0x2d] = 1;
+  param_1[0x2e] = 1;
+  *(undefined2 *)(param_1 + 0x2f) = 0x1c04;
+  *(undefined2 *)((long)param_1 + 0xd6) = 0;
+  *(undefined8 *)((long)param_1 + 0xce) = 0;
+  *(undefined8 *)((long)param_1 + 0xc6) = 0;
+  *(undefined8 *)((long)param_1 + 0xbe) = 0;
+  *(undefined1 *)((long)param_1 + 0x111) = 0;
+  *(undefined2 *)((long)param_1 + 0x10f) = 0;
+  *(undefined4 *)((long)param_1 + 0x10b) = 0;
+  *(undefined8 *)((long)param_1 + 0x103) = 0;
+  *(ulong *)((long)param_1 + 0xfb) = (ulong)local_30;
+  *(undefined1 *)(param_1 + 0x36) = 1;
+  *(undefined1 *)((long)param_1 + 0xdb) = 0;
+  *(undefined2 *)((long)param_1 + 0xd9) = 0;
+  *(undefined2 *)(param_1 + 0x3e) = 7;
+  *(undefined2 *)(param_1 + 0x3f) = 0;
+  *(undefined1 *)((long)param_1 + 0xfe) = 2;
+  *(undefined2 *)((long)param_1 + 0xfa) = 0;
+  *(undefined1 *)((long)param_1 + 0xff) = 1;
+  param_1[0x40] = 1;
+  param_1[0x41] = 1;
+  param_1[0x42] = 0;
+  *(undefined2 *)(param_1 + 0x43) = 0;
+  *(undefined2 *)((long)param_1 + 0x10e) = 0;
+  *(undefined2 *)((long)param_1 + 0x122) = 0;
+  *(undefined8 *)((long)param_1 + 0x11a) = 0;
+  *(undefined8 *)((long)param_1 + 0x112) = 0;
+  *(undefined2 *)(param_1 + 0x49) = 6;
+  *(undefined2 *)(param_1 + 0x4a) = 0;
+  *(undefined1 *)((long)param_1 + 0x12a) = 2;
+  *(undefined2 *)((long)param_1 + 0x126) = 0;
+  *(undefined1 *)((long)param_1 + 299) = 1;
+  param_1[0x4b] = 1;
+  param_1[0x4c] = 1;
+  param_1[0x4d] = 0;
+  *(undefined2 *)(param_1 + 0x4e) = 0;
+  *(undefined2 *)((long)param_1 + 0x13a) = 0;
+  *(undefined2 *)((long)param_1 + 0x152) = 0;
+  *(undefined4 *)((long)param_1 + 0x14e) = 0;
+  *(undefined8 *)((long)param_1 + 0x146) = 0;
+  *(undefined8 *)((long)param_1 + 0x13e) = 0;
+  *(undefined2 *)(param_1 + 0x55) = 8;
+  *(undefined2 *)(param_1 + 0x56) = 0;
+  *(undefined1 *)((long)param_1 + 0x15a) = 2;
+  *(undefined2 *)((long)param_1 + 0x156) = 0;
+  *(undefined1 *)((long)param_1 + 0x15b) = 1;
+  param_1[0x57] = 1;
+  param_1[0x58] = 1;
+  param_1[0x59] = 0;
+  *(undefined2 *)(param_1 + 0x5a) = 0;
+  *(undefined2 *)((long)param_1 + 0x16a) = 0;
+  *(undefined2 *)((long)param_1 + 0x18a) = 0;
+  *(undefined4 *)((long)param_1 + 0x186) = 0;
+  *(undefined8 *)((long)param_1 + 0x17e) = 0;
+  *(undefined8 *)((long)param_1 + 0x176) = 0;
+  *(undefined8 *)((long)param_1 + 0x16e) = 0;
+  cVar2 = '\0';
+  lVar1 = 3;
+  do {
+    cVar2 = *(char *)((long)param_1 + lVar1) +
+            *(char *)((long)param_1 + lVar1 + -1) +
+            *(char *)((long)param_1 + lVar1 + -2) + *(char *)((long)param_1 + lVar1 + -3) + cVar2;
+    lVar1 = lVar1 + 4;
+  } while (lVar1 != 399);
+  *(char *)((long)param_1 + 9) = -cVar2;
+  return;
+}
+

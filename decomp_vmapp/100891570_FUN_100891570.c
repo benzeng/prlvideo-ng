@@ -1,0 +1,32 @@
+
+undefined8 FUN_100891570(long param_1,long param_2,long param_3,ulong param_4)
+
+{
+  ulong uVar1;
+  long lVar2;
+  ulong uVar3;
+  long lVar4;
+  
+  if (param_4 >> 0x3e != 0) {
+    uVar1 = param_4 + 0xc000000000000000;
+    uVar3 = uVar1 & 0xc000000000000000;
+    lVar2 = param_3 + uVar3 + 0x4000000000000000;
+    lVar4 = param_2;
+    do {
+      FUN_10083ac70(param_3,lVar4,0x4000000000000000,*(long *)(param_1 + 0x78) + 4,param_1 + 0x28,
+                    param_1 + 0x58);
+      param_4 = param_4 + 0xc000000000000000;
+      param_3 = param_3 + 0x4000000000000000;
+      lVar4 = lVar4 + 0x4000000000000000;
+    } while (0x3fffffffffffffff < param_4);
+    param_2 = param_2 + uVar3 + 0x4000000000000000;
+    param_4 = uVar1 - uVar3;
+    param_3 = lVar2;
+  }
+  if (param_4 != 0) {
+    FUN_10083ac70(param_3,param_2,param_4,*(long *)(param_1 + 0x78) + 4,param_1 + 0x28,
+                  param_1 + 0x58);
+  }
+  return 1;
+}
+

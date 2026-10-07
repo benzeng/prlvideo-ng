@@ -1,0 +1,27 @@
+
+undefined4 FUN_10012b080(undefined8 param_1)
+
+{
+  undefined4 uVar1;
+  QArrayData *pQVar2;
+  QArrayData *local_30;
+  undefined1 local_22;
+  
+  pQVar2 = (QArrayData *)QString::fromAscii_helper("vm_start_ex_cmd_reserved_parameter",0x22);
+  local_30 = pQVar2;
+  uVar1 = FUN_10011d510(param_1,&local_30);
+  if (*(int *)pQVar2 != -1) {
+    if (*(int *)pQVar2 != 0) {
+      LOCK();
+      *(int *)pQVar2 = *(int *)pQVar2 + -1;
+      local_22 = *(int *)pQVar2 != 0;
+      UNLOCK();
+      if ((bool)local_22) {
+        return uVar1;
+      }
+    }
+    QArrayData::deallocate(pQVar2,2,8);
+  }
+  return uVar1;
+}
+

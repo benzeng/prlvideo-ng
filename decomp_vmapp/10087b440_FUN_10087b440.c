@@ -1,0 +1,15 @@
+
+void FUN_10087b440(long param_1,undefined8 param_2,undefined8 param_3)
+
+{
+  undefined8 local_18;
+  undefined8 local_10;
+  
+  if (param_1 != 0) {
+    local_18 = param_2;
+    local_10 = param_3;
+    FUN_100885f10(param_1,FUN_10087b470,&local_18);
+  }
+  return;
+}
+

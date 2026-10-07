@@ -1,0 +1,8 @@
+
+void _xmlUCSIsCatM(uint param_1)
+
+{
+  _xmlCharInRange(param_1,(xmlChRangeGroup *)&DAT_101113ed0);
+  return;
+}
+

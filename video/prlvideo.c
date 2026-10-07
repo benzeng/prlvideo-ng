@@ -806,6 +806,36 @@ prl_thread_probe(PrlPtr pPrl)
     pPrl->probe_note_pending = TRUE;
 }
 
+/* MM SET_MODE (0x8114): declare our mode to the host display state.
+ * Per the decompiled original: SetScrnMode sends this BEFORE the
+ * share-states loop; without it the host zeroes all dirty state
+ * ([0x910]+8==0). 32-byte inline payload, field order empirically
+ * locked in round 8. */
+static void
+prl_send_set_mode(PrlPtr pPrl, unsigned w, unsigned h, unsigned stride)
+{
+    unsigned char msg[64] __attribute__((aligned(8)));
+    TgRequest *req = (TgRequest *)msg;
+    unsigned short *inl = (unsigned short *)(msg + sizeof(TgRequest));
+    void *p = msg;
+
+    memset(msg, 0, sizeof(msg));
+    req->Request = 0x8114;
+    req->Status = 0xffffffff;
+    req->InlineByteCount = 32;
+    inl[0] = 0;            /* head */
+    inl[1] = 32;           /* bpp */
+    inl[2] = (unsigned short)w;
+    inl[3] = (unsigned short)h;
+    *(unsigned *)(msg + sizeof(TgRequest) + 8) = stride;
+    *(unsigned *)(msg + sizeof(TgRequest) + 12) = 60;   /* refresh */
+    *(unsigned short *)(msg + sizeof(TgRequest) + 16) = 1;  /* flags */
+    *(unsigned *)(msg + sizeof(TgRequest) + 24) = pPrl->fb_offset;
+    pPrl->last_write_rc = write(pPrl->vtg_fd, &p, sizeof(p));
+    if (pPrl->last_write_rc < 0)
+        pPrl->last_write_errno = errno;
+}
+
 static void
 prlm_otg_display_session(PrlPtr pPrl)
 {
@@ -842,7 +872,13 @@ prl_share_thread(void *arg)
 
     if (pPrl->otg_display_pending) {
         pPrl->otg_display_pending = FALSE;
-        prlm_otg_display_session(pPrl);
+        /* the critical registration is toolgate 0x8114 + 0x8117
+         * (probe + loop below); the OTG display session parks on
+         * this host — skip it */
+        prl_send_set_mode(pPrl, pPrl->frame_w, pPrl->frame_h,
+                          pPrl->frame_w * 4);
+        xf86Msg(X_INFO, PRL_NAME ": set-mode 0x8114 sent (%ux%u)\n",
+                pPrl->frame_w, pPrl->frame_h);
     }
     prl_thread_probe(pPrl);
 
@@ -1297,6 +1333,9 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
                     pScrn->options, xf86OptionListDuplicate(dev->options));
         }
     }
+    pPrl->frame_w = pScrn->virtualX;
+    pPrl->frame_h = pScrn->virtualY;
+
     {
         const char *v = pScrn->options ?
             xf86FindOptionValue(pScrn->options, "ShareState") : NULL;
@@ -1324,9 +1363,6 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
                     "continuous-scanout mode (no toolgate probe traffic)\n");
         }
     }
-
-    pPrl->frame_w = pScrn->virtualX;
-    pPrl->frame_h = pScrn->virtualY;
 
     if (xf86ScreenToScrn(pScreen)->scrnIndex == 0 &&
         !AddExtension("ParallelsControl", 0, 0, prl_ctl_proc,

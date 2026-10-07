@@ -1,0 +1,10 @@
+
+void FUN_100567ee0(undefined8 *param_1)
+
+{
+  *param_1 = &PTR_FUN_100bc5f10;
+  QMutex::~QMutex((QMutex *)(param_1 + 1));
+  operator_delete(param_1);
+  return;
+}
+
