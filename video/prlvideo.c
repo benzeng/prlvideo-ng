@@ -714,9 +714,10 @@ _X_EXPORT void prl_share_mouse_position(int x, int y)
  * Message shapes are ported from the decompiled original driver. */
 
 static void
-prl_send_share_state(PrlPtr pPrl, unsigned short x1, unsigned short y1,
-                     unsigned short x2, unsigned short y2,
-                     unsigned mx, unsigned my)
+prl_send_share_state_fd(PrlPtr pPrl, int fd,
+                        unsigned short x1, unsigned short y1,
+                        unsigned short x2, unsigned short y2,
+                        unsigned mx, unsigned my)
 {
     unsigned short bounds[16][4];
     unsigned mouse_xy[2];
@@ -746,6 +747,14 @@ prl_send_share_state(PrlPtr pPrl, unsigned short x1, unsigned short y1,
         if (pPrl->last_write_rc < 0)
             pPrl->last_write_errno = errno;
     }
+}
+
+static void
+prl_send_share_state(PrlPtr pPrl, unsigned short x1, unsigned short y1,
+                     unsigned short x2, unsigned short y2,
+                     unsigned mx, unsigned my)
+{
+    prl_send_share_state_fd(pPrl, pPrl->vtg_fd, x1, y1, x2, y2, mx, my);
 }
 
 /* MOUSE_SET_POINTER show: 0x8100, 28-byte inline {x,y,hsx,hsy,w,h,stride}
@@ -905,8 +914,9 @@ prl_kick_thread(void *arg)
     sigfillset(&set);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
     while (pPrl->thread_run) {
-        prl_send_share_state(pPrl, 0x3fff, 0x3fff, 0xc000, 0xc000,
-                             prl_shared_mouse_x, prl_shared_mouse_y);
+        prl_send_share_state_fd(pPrl, pPrl->kick_fd, 0x3fff, 0x3fff,
+                                0xc000, 0xc000,
+                                prl_shared_mouse_x, prl_shared_mouse_y);
         usleep(16000);            /* ~60Hz heartbeat */
     }
     return NULL;
@@ -1419,10 +1429,13 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
                         "(ShareState enabled)\n");
                 /* the kicker needs its OWN fd — same-fd writes serialize */
                 pPrl->kick_fd = open(PRL_VTG_PATH, O_WRONLY);
+                xf86Msg(X_INFO, PRL_NAME ": kick_fd=%d\n", pPrl->kick_fd);
                 if (pPrl->kick_fd >= 0 &&
                     pthread_create(&pPrl->kick_thread, NULL,
-                                   prl_kick_thread, pPrl) == 0)
+                                   prl_kick_thread, pPrl) == 0) {
                     pPrl->kick_started = TRUE;
+                    xf86Msg(X_INFO, PRL_NAME ": kicker thread up\n");
+                }
             } else {
                 pPrl->thread_run = FALSE;
                 xf86Msg(X_WARNING, PRL_NAME ": sender thread create failed\n");
