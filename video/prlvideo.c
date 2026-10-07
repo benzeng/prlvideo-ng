@@ -713,14 +713,20 @@ _X_EXPORT void prl_share_mouse_position(int x, int y)
  * main thread never touches them; worst case is one parked thread.
  * Message shapes are ported from the decompiled original driver. */
 
+/* stable, persistent share buffers: the host reads these addresses on
+ * its own frame clock (the 0x8117 write only registers them; stack
+ * buffers die with the parked write and the host reads garbage) */
+static unsigned short prl_bounds[16][4];
+static unsigned prl_mouse_xy[2] = {960, 600};
+
 static void
 prl_send_share_state_fd(PrlPtr pPrl, int fd,
                         unsigned short x1, unsigned short y1,
                         unsigned short x2, unsigned short y2,
                         unsigned mx, unsigned my)
 {
-    unsigned short bounds[16][4];
-    unsigned mouse_xy[2];
+    unsigned short (*bounds)[4] = prl_bounds;
+    unsigned *mouse_xy = prl_mouse_xy;
     unsigned char msg[64] __attribute__((aligned(8)));
     TgRequest *req = (TgRequest *)msg;
     TgBuffer *buf;
@@ -948,6 +954,22 @@ prl_share_thread(void *arg)
                 pPrl->frame_w, pPrl->frame_h);
     }
     prl_thread_probe(pPrl);
+
+    /* re-run the console activation check: the mouse driver's console
+     * layout (cmd 4) ran BEFORE our 0x8117 registered the cell, so the
+     * check failed then; a cursor-show (0x8100) re-runs it now that the
+     * cell exists */
+    {
+        static unsigned char plane[6 + 64 * 64 * 4];
+
+        plane[0] = 0x20; plane[1] = 64 << 2; plane[2] = 64; plane[3] = 64;
+        pthread_mutex_lock(&pPrl->lock);
+        pPrl->mouse_x = prl_shared_mouse_x;
+        pPrl->mouse_y = prl_shared_mouse_y;
+        prl_send_cursor_show(pPrl, plane);
+        pthread_mutex_unlock(&pPrl->lock);
+        xf86Msg(X_INFO, PRL_NAME ": console activation re-triggered\n");
+    }
 
     RegionInit(&dirty, (BoxPtr)NULL, 0);
     while (pPrl->thread_run) {
