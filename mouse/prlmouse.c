@@ -33,6 +33,8 @@
  * PrlCtlShareMousePosition the same way */
 extern void prl_share_mouse_position(int x, int y)
     __attribute__((weak));
+extern int prl_share_state_enabled(void)
+    __attribute__((weak));
 
 #define PRLM_NAME "prlmouse"
 
@@ -363,7 +365,8 @@ prlm_device_on(InputInfoPtr pInfo)
 
     if (!pInfo->private) {
         pInfo->private = calloc(1, sizeof(PrlMouseRec));
-        if (pInfo->private) {
+        if (pInfo->private && prl_share_state_enabled &&
+            prl_share_state_enabled()) {
             PrlMousePriv pp = (PrlMousePriv)pInfo->private;
             ScrnInfoPtr pScrn = xf86Screens[0];
             int rc;
@@ -375,6 +378,9 @@ prlm_device_on(InputInfoPtr pInfo)
             xf86Msg(X_INFO, "%s: sliding session %s (rc=%d batch=%d)\n",
                     PRLM_NAME, rc == 0 ? "ENABLED" : "unavailable",
                     rc, rc == 0 ? pp->batch : 0);
+        } else {
+            xf86Msg(X_INFO, "%s: sliding session OFF (ShareState disabled)\n",
+                    PRLM_NAME);
         }
     }
     xf86AddEnabledDevice(pInfo);
