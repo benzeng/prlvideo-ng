@@ -697,6 +697,16 @@ prl_ctl_close(ExtensionEntry *e)
     (void)e;
 }
 
+/* real cursor position shared from prlmouse-ng (same process);
+ * the original exported PrlCtlShareMousePosition for exactly this */
+volatile int prl_shared_mouse_x = 960, prl_shared_mouse_y = 600;
+
+_X_EXPORT void prl_share_mouse_position(int x, int y)
+{
+    prl_shared_mouse_x = x;
+    prl_shared_mouse_y = y;
+}
+
 /* ---- share-state / cursor sender thread -------------------------------
  * All 0x8117 / 0x8100 / 0x8101 writes happen here.  When the host display
  * consumer is inactive these writes block indefinitely (verified), so the
@@ -721,7 +731,7 @@ prl_send_share_state(PrlPtr pPrl, unsigned short x1, unsigned short y1,
     }
     bounds[0][0] = x1; bounds[0][1] = y1;
     bounds[0][2] = x2; bounds[0][3] = y2;
-    mouse_xy[0] = mx; mouse_xy[1] = my;
+    mouse_xy[0] = mx = prl_shared_mouse_x; mouse_xy[1] = my = prl_shared_mouse_y;
 
     memset(msg, 0, sizeof(msg));
     req->Request = 0x8117;
@@ -873,7 +883,7 @@ prl_kick_thread(void *arg)
     pthread_sigmask(SIG_BLOCK, &set, NULL);
     while (pPrl->thread_run) {
         prl_send_share_state(pPrl, 0x3fff, 0x3fff, 0xc000, 0xc000,
-                             960, 600);
+                             prl_shared_mouse_x, prl_shared_mouse_y);
         usleep(16000);            /* ~60Hz heartbeat */
     }
     return NULL;

@@ -672,3 +672,28 @@ Mach-O 手工解析（段映射 + RIP 相对引用扫描 + 局部 objdump），
 **三天全部技术资产**：25,472 函数宿主反编译、prlcc 协议全表、
 鼠标驱动生产可用、X 扩展双向验证、OTG 传输修正、本次双线程
 互踢机制——全部开源在 benzeng/prlvideo-ng。
+
+## ⚔️ 双会话实验战报（2026-10-07 深夜续）
+
+**实验**：ShareState on + prlmouse 滑动会话 + 真实光标位置共享
+（prlvideo 导出 prl_share_mouse_position，prlmouse weak-import 调用，
+原版同构）+ prlcc 手动在场。四件套齐发。
+
+**结果**：键鼠仍死（Xorg 主线程健康——epoll 正常空闲，是宿主停止
+注入输入事件）。prlcc 补位后也不复活。
+
+**决定性新证据**：宿主日志在会话激活时刻精确出现
+`sendPackage failed to vm [], retCode = 4`——宿主注册完成后要向
+guest 投递"会话包"（投递目标=prlcc 的 0x8230 sub 0x18 阻塞接收
+循环），投递失败。输入切换被挂在这次失败的投递上。
+
+**下一步课题（下次继续）**：
+1. 为什么 sendPackage 失败（retCode=4）——prl_tg 模块的 host→guest
+   投递路径要求什么状态？反编译 decomp_vmapp 里搜 sendPackage 的
+   guest 侧投递函数（retCode 4 = ?）
+2. 原版栈在 greeter（无 prlcc）时输入正常——说明原版驱动的注册
+   序列里有什么让宿主**不切输入**或**成功投递**。差异候选：
+   PrlHWCInit 的 OTG 光标会话 {1,3,...}（我们从未成功发过——
+   OTG 显示类请求全部停摆，但鼠标类 OTG 请求成功！差异在哪？）
+3. 已恢复稳定基线：无 ShareState，libinput... 不，prlmouse 仍在
+   （相对模式正常工作）
