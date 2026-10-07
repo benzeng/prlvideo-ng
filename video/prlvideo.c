@@ -849,6 +849,29 @@ prl_send_set_mode(PrlPtr pPrl, unsigned w, unsigned h, unsigned stride)
         pPrl->last_write_errno = errno;
 }
 
+/* HWC cursor-session init: OTG {1,3,...} 28B (PrlHWCInit in the
+ * original EnterVT, between mode-set and share-states). The mouse
+ * class of OTG requests works on the fixed transport; this was
+ * excluded as a hypothesis back when the transport itself was
+ * broken. Response byte @12 = supported flag. */
+static void
+prlm_hwc_init(PrlPtr pPrl)
+{
+    unsigned char ob[64] __attribute__((aligned(8)));
+    unsigned *o = (unsigned *)ob;
+    uint32_t actual;
+    int rc;
+
+    if (otg_open(&pPrl->otglink))
+        return;
+    memset(ob, 0, 28);
+    o[0] = 1;
+    o[2] = 3;
+    rc = otg_request(&pPrl->otglink, ob, 0x1c, 0x1c, &actual);
+    xf86Msg(X_INFO, PRL_NAME ": HWC session init rc=%d supported=%u\n",
+            rc, rc == 0 ? o[3] : 0);
+}
+
 static void
 prlm_otg_display_session(PrlPtr pPrl)
 {
@@ -910,6 +933,9 @@ prl_share_thread(void *arg)
          * this host — skip it */
         prl_send_set_mode(pPrl, pPrl->frame_w, pPrl->frame_h,
                           pPrl->frame_w * 4);
+        /* HWC OTG init crashes Xorg from this thread — disabled
+         * pending diagnosis (mouse-driver OTG works; video-thread
+         * OTG with {1,3} kills the server) */
         xf86Msg(X_INFO, PRL_NAME ": set-mode 0x8114 sent (%ux%u)\n",
                 pPrl->frame_w, pPrl->frame_h);
     }
