@@ -487,3 +487,63 @@ guest 侧都不会恶化显示。
 - Damage/光标/RandR 全部机制保留在代码中，随时可激活
 
 夜间回归：连续 4 次 xfce4-terminal 启动全过，X 稳定，1920x1200。
+
+
+# 第二部分：prlmouse-ng（鼠标无缝切换）
+
+目标：Xorg 21 上的 Parallels 鼠标无缝切换（窗口模式光标无感进出 VM）。
+
+## 已完整破译（来自 prlmouse_drv.so 465 函数反编译的鼠标子集）
+
+prlmouse = xf86-input-mouse 分叉 + Parallels "OTG" 层（RDPMC 超调用私有通道）：
+- 设备：/dev/input/mice|psaux|gpmdata 探测；udev 规则把 i8042 AUX 的
+  event 节点打 prlmouse 标签（xorg-prlmouse.rules），InputClass 绑定
+- 读入：24B struct input_event（64 位）；相对分支解码 REL_X/Y/WHEEL/
+  HWHEEL + BTN_LEFT/RIGHT/MIDDLE（掩码 xor/or 维护）
+- 绝对模式（"Sliding Mouse"）全走 OTG 通道，**不写任何 PS/2 魔法**：
+  - DEVICE_ON: otg {1,0,1} 使能 + {1,0,7} 版本查询（resp u32@0x0c≠0
+    ⇒ 支持批量模式）
+  - 轮询模式（版本 0）: {1,0,2} → resp u16@0x0e absX, @0x10 absY,
+    @0x12/@0x14 dims（双 >1 ⇒ 绝对模式开）, @0x16 Z
+  - 批量模式: 发 0x44 字节 {1,_,8,0,1,0xfd0} → 收 ≤0xfe8，
+    u32@0x14=dataLen，buf+0x18 起每 44B 事件记录：
+    [0]flags(bit0=绝对) [3]buttons [4]X [5]Y [6]Z [7]W [9][10]dims
+  - 抓放 = 宿主逐事件用 flags bit0 驱动；guest 端零决策逻辑
+  - 绝对坐标为桌面全局系，投递时减 miPointerGetScreen()->x/y
+- TIS 工具注册（模块初始化必发，否则宿主不认账）:
+  消息 = 16B 命令头 {0xE,0,1,0} + 12B 流头 {TLV总长, 0x1000, 0} +
+  TLV 序列（每项 {u32 len, u32 tag, u32 seq, data}）：
+  0x2001 {1,3} 版本 → 0x20ca 描述串 → 0x20cb 40B 工具身份
+  ({0xc,2,0xa28f,flags,1,0,0x3041a28f,9,...}) → 0x20cc "initialized"
+  → 0x2191 "parallels.SlidingMouse.guest.lin"（名字最后）
+
+## OTG 传输层寄存器布局（本次修正的关键 bug）
+
+超调用六字 w[0..5] = rax,rbx,rcx,rdx,rsi,rdi：
+- 建: {0x5f9e653, 总发送长, 有收, max(收,发), 本次发, buf指针}
+- 续: {0x5f9e654, 通道id,     有收, max(收,发), 本次发, buf指针}
+- 回传: 通道=w1(建时), off=w4, status=w5, 实收字节=w3
+- 取消: {0x5f9e655, 通道id, ...} → status=w5
+旧实现的发送长/指针/max 三槽位串位（历史遗留），响应一直是自己的
+请求回显。修正后 actual=28 真实响应。
+
+## 门控排查记录（宿主滑动状态恒为零的原因）
+
+已排除：
+- 窗口/全屏模式（用户全程窗口模式）
+- 显示 share 消费者（keeper 开启验证，鼠标状态仍零——两会话独立）
+- prlcc 会话代理单跑（连 X+toolgate 双 socket 后静默等待）
+- TIS 注册（rc=0 被接受，状态仍零）
+- 注入 GL_VERSION/ENABLE_HEAD/SET_MODE（全部完成，状态仍零）
+
+**头号嫌疑：ParallelsControl X 扩展**（原版视频驱动注册，prlcc 与
+DDX 的控制面桥梁——prlcc 的静默等待形态与其吻合）。下一步：反编译
+/usr/bin/prlcc（X 客户端侧），提取扩展请求线格式，在 prlvideo-ng 里
+实现该扩展，观察宿主是否点亮滑动鼠标（可能连显示特性一起点亮）。
+
+## 事故记录
+
+注入实验（SET_MODE）+ keeper 叠加 → 黑屏（用户窗口模式全程）。
+恢复：systemctl stop prl-keeper && vgaset 1920 1200 7680 &&
+tgrestore2 1920 1200。工具已永久化：/usr/local/bin/vgaset。
+/tmp 会被清理——救火工具不要放 /tmp。

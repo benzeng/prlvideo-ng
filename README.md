@@ -1,7 +1,15 @@
 # prlvideo-ng
 
-X.Org video driver for **Parallels Desktop 12** virtual graphics on modern Linux
-(tested: Kali Rolling, kernel 7.1.5+kali-amd64, Xorg 21.1.24, gcc 15.3).
+Clean-room reimplementation of **Parallels Tools 12.2.1** display and mouse
+integration for modern Linux (tested: Kali Rolling, kernel 7.1.5+kali-amd64,
+Xorg 21.1.24, gcc 15.3).
+
+| Directory | Component | Status |
+|---|---|---|
+| `video/` | X.Org video driver (prlvideo) | ✅ daily-driver stable |
+| `mouse/` | X.Org input driver (prlmouse, seamless capture) | 🚧 protocol solved, host gate under investigation |
+| `otg/` | shared OTG hypercall transport | ✅ |
+| `upstream/` | xorg-server hardening patch | ready to send |
 
 Brings a 2017 virtual GPU back to life on a 2026 stack: mode-set via the
 Parallels VGA extended sequencer registers, a framebuffer mapped directly into
@@ -56,7 +64,7 @@ the toolgate/RDPMC/VGA protocols (see `PROTOCOL.md` in the companion repo
 
 ```bash
 make
-sudo make install        # copies prlvideo_drv.so to /usr/lib/xorg/modules/drivers/
+sudo make install   # into /usr/lib/xorg/modules/drivers/
 ```
 
 `/etc/X11/xorg.conf.d/` device section:
