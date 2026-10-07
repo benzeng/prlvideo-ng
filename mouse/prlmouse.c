@@ -27,6 +27,13 @@
 #include "otg.h"
 #include "mipointer.h"
 
+#include <dlfcn.h>
+
+/* prlvideo-ng exports this (same process); the original stack linked
+ * PrlCtlShareMousePosition the same way */
+extern void prl_share_mouse_position(int x, int y)
+    __attribute__((weak));
+
 #define PRLM_NAME "prlmouse"
 
 typedef struct {
@@ -37,6 +44,7 @@ typedef struct {
     unsigned short abs_x, abs_y, dim_w, dim_h;
     int last_buttons;
     int logged;
+    int evdev_active;
     unsigned char evbuf[0xfe8];
 } PrlMouseRec, *PrlMousePriv;
 static int prlm_pre_init(InputDriverPtr drv, InputInfoPtr pInfo, int flags);
@@ -138,6 +146,12 @@ prlm_sliding_poll(PrlMousePriv p)
         xf86Msg(X_INFO, PRLM_NAME ": host sliding ACTIVE dims=%ux%u\n",
                 p->dim_w, p->dim_h);
     }
+    /* torn reads happen (host sampled 1292x10 mid-mode-set once);
+     * absolute only for plausible geometry */
+    if (p->dim_w < 640 || p->dim_h < 480) {
+        p->dim_w = 0;
+        p->dim_h = 0;
+    }
     return 0;
 }
 
@@ -179,6 +193,36 @@ _X_EXPORT XF86ModuleData prlmouseModuleData = {
 
 /* ---- device control ------------------------------------------------- */
 
+/* poll OTG on a timer: when the host stops PS/2 injection (display
+ * session active), evdev never fires and absolute events would starve */
+static CARD32
+prlm_wakeup_timer(OsTimerPtr timer, CARD32 now, pointer arg)
+{
+    InputInfoPtr pInfo = (InputInfoPtr)arg;
+    PrlMousePriv p = (PrlMousePriv)pInfo->private;
+
+    (void)timer; (void)now;
+    if (p && p->sliding_on && !p->evdev_active) {
+        if (prlm_sliding_poll(p) == 0 && p->dim_w > 640 && p->dim_h > 480) {
+            int x = p->abs_x, y = p->abs_y;
+            ScreenPtr scr = miPointerGetScreen(pInfo->dev);
+
+            if (scr) {
+                x -= scr->x;
+                y -= scr->y;
+            }
+            if (x < 0) x = 0;
+            if (y < 0) y = 0;
+            if (x >= (int)p->dim_w) x = p->dim_w - 1;
+            if (y >= (int)p->dim_h) y = p->dim_h - 1;
+            xf86PostMotionEvent(pInfo->dev, TRUE, 0, 2, x, y);
+        }
+    }
+    if (p)
+        p->evdev_active = FALSE;   /* read_input re-sets it */
+    return 20;                     /* 20ms rearm */
+}
+
 static int
 prlm_device_on(InputInfoPtr pInfo)
 {
@@ -206,6 +250,7 @@ prlm_device_on(InputInfoPtr pInfo)
         }
     }
     xf86AddEnabledDevice(pInfo);
+    TimerSet(NULL, 0, 20, prlm_wakeup_timer, pInfo);
     return Success;
 }
 
@@ -228,6 +273,7 @@ prlm_read_input(InputInfoPtr pInfo)
 
     /* drain the evdev fd first (it is also the poll heartbeat), then
      * fetch the host sliding state and post absolute when served */
+    p->evdev_active = TRUE;
     while ((n = read(pInfo->fd, buf, sizeof(buf))) > 0) {
         int recs = n / 24;
         int i, dx = 0, dy = 0, dz = 0, dw = 0;
@@ -269,8 +315,14 @@ prlm_read_input(InputInfoPtr pInfo)
                                         value != 0, 0, 0);
             }
         }
-        if (dx || dy)
+        if (dx || dy) {
             xf86PostMotionEvent(pInfo->dev, FALSE, 0, 2, dx, dy);
+            if (prl_share_mouse_position) {
+                static int sx, sy;
+                sx += dx; sy += dy;
+                prl_share_mouse_position(sx, sy);
+            }
+        }
         if (dz)
             xf86PostMotionEvent(pInfo->dev, FALSE, 2, 1, dz);
         if (dw)
