@@ -92,6 +92,8 @@ typedef struct {
     Bool dynres_enabled;         /* prlcc 0x17 */
     Bool vt_active;              /* prlcc 0x1c: X owns the active VT */
     Bool share_opt;              /* Option ShareState, parsed in PreInit */
+    Bool otg_display_pending;    /* sender thread opens the OTG session */
+    struct otg_link otglink;
 
     DamagePtr damage;
     xf86CursorInfoPtr cursor_info;
@@ -804,6 +806,26 @@ prl_thread_probe(PrlPtr pPrl)
     pPrl->probe_note_pending = TRUE;
 }
 
+static void
+prlm_otg_display_session(PrlPtr pPrl)
+{
+    struct otg_link *ol = &pPrl->otglink;
+    unsigned char ob[64] __attribute__((aligned(8)));
+    unsigned *o = (unsigned *)ob;
+    uint32_t actual;
+    int rc = otg_open(ol);
+
+    if (rc == 0) {
+        memset(ob, 0, 28);
+        o[0] = 0xb; o[2] = 5; o[3] = 1;      /* max heads = 1 */
+        otg_request(ol, ob, 0x1c, 0, &actual);
+        memset(ob, 0, 28);
+        o[0] = 0xb; o[3] = 0;                /* DynRes enable */
+        otg_request(ol, ob, 0x1c, 0, &actual);
+    }
+    xf86Msg(X_INFO, PRL_NAME ": OTG display session rc=%d\n", rc);
+}
+
 static void *
 prl_share_thread(void *arg)
 {
@@ -818,6 +840,10 @@ prl_share_thread(void *arg)
     sigfillset(&set);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
+    if (pPrl->otg_display_pending) {
+        pPrl->otg_display_pending = FALSE;
+        prlm_otg_display_session(pPrl);
+    }
     prl_thread_probe(pPrl);
 
     RegionInit(&dirty, (BoxPtr)NULL, 0);
@@ -1140,28 +1166,14 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
      * keeps recomposite flowing — replicating the original driver. */
     xf86Msg(X_INFO, PRL_NAME ": ScreenInit w=%d h=%d stride=%u off=0x%x\n",
             pScrn->displayWidth, pScrn->virtualY, stride, pPrl->fb_offset);
-    prl_vga_mode(32, (unsigned)pScrn->displayWidth,
-                 (unsigned)pScrn->virtualY, stride, pPrl->fb_offset);
+    if (pPrl->share_opt)
+        prl_vga_mode(32, (unsigned)pScrn->displayWidth,
+                     (unsigned)pScrn->virtualY, stride, pPrl->fb_offset);
 
-    /* OTG display session: DynRes enable + max-heads report (the
-     * original EnterVT chain — the host's "monitor ready" gate) */
-    {
-        static struct otg_link olink;
-        unsigned char ob[64] __attribute__((aligned(8)));
-        unsigned *o = (unsigned *)ob;
-        uint32_t actual;
-        int rc = otg_open(&olink);
-
-        if (rc == 0) {
-            memset(ob, 0, 28);
-            o[0] = 0xb; o[2] = 5; o[3] = 1;      /* max heads = 1 */
-            otg_request(&olink, ob, 0x1c, 0, &actual);
-            memset(ob, 0, 28);
-            o[0] = 0xb; o[3] = 0;                /* DynRes enable */
-            otg_request(&olink, ob, 0x1c, 0, &actual);
-        }
-        xf86Msg(X_INFO, PRL_NAME ": OTG display session rc=%d\n", rc);
-    }
+    /* OTG display session (DynRes enable + max-heads report) is handed
+     * to the sender thread — calling OTG on the main thread hangs
+     * ScreenInit (requests park without a live consumer). */
+    pPrl->otg_display_pending = pPrl->share_opt;
     xf86Msg(X_INFO, PRL_NAME ": calling fbScreenInit\n");
 
     /* VRAM direct mapping (fb_offset=0): writes go straight to host
