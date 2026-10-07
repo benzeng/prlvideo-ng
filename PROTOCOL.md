@@ -547,3 +547,26 @@ DDX 的控制面桥梁——prlcc 的静默等待形态与其吻合）。下一�
 恢复：systemctl stop prl-keeper && vgaset 1920 1200 7680 &&
 tgrestore2 1920 1200。工具已永久化：/usr/local/bin/vgaset。
 /tmp 会被清理——救火工具不要放 /tmp。
+
+## 🔭 ParallelsControl 扩展落地（2026-10-07 下午）
+
+**控制面已双向贯通**（提交 7fb07bc）：
+- prlcc（原版二进制）对我们 DDX 的 ParallelsControl 扩展完成完整握手
+- prlcc 日志（/var/log/parallels.log）亲证：Control Center started /
+  Dynamic Resolution initialized（读到我们注册的 RandR 范围）/
+  Coherence + Utility Tool 全部上线，prl_tg 0x8230/0x8000 流量流动
+- 实现的处理器：0x1d 会话、0x17/0x18 dynres、0x1c ping、0x01/0x11
+  resize（接 RandR）、0x1b 光标重建、0x0e visual id、一致性系列查询
+
+**生产配置**：/etc/xdg/autostart/prlcc.desktop（原版文件）+
+主显示无 ShareState（持续扫描保稳定）+ 扩展常驻。用户登录即自动
+注册会话。
+
+**宿主总闸（未破）**：即使 keeper（显示会话）+ prlcc（三组件注册）
++ DynRes 同框，宿主侧 OTG 分辨率轮询与滑动鼠标状态仍为零。
+判定：闸门在宿主内部状态机（可能按"tools 健康"或显示会话指纹
+键控），guest 侧可见的钥匙已全部试过。下一步如继续：macOS 侧
+PD 应用分析或宿主动态跟踪（超出 guest 逆向范围）。
+
+**工程教训**：xf86CollectOptions 在无 Screen 段绑定的屏幕上崩溃
+（monitor/confScreen 裸解引用）——改从实体直接读 Device 选项。
