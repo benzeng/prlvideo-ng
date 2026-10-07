@@ -24,13 +24,122 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <linux/input.h>
+#include "otg.h"
+#include "mipointer.h"
 
 #define PRLM_NAME "prlmouse"
 
+typedef struct {
+    struct otg_link link;
+    int otg_ready;
+    int sliding_on;          /* host acked the session */
+    int batch;               /* host supports batch events */
+    unsigned short abs_x, abs_y, dim_w, dim_h;
+    int last_buttons;
+    int logged;
+    unsigned char evbuf[0xfe8];
+} PrlMouseRec, *PrlMousePriv;
 static int prlm_pre_init(InputDriverPtr drv, InputInfoPtr pInfo, int flags);
 static void prlm_un_init(InputDriverPtr drv, InputInfoPtr pInfo, int flags);
 static Bool prlm_device_control(DeviceIntPtr dev, int what);
 static void prlm_read_input(InputInfoPtr pInfo);
+
+
+/* ---- OTG sliding-mouse session (from the decompiled original) ------ */
+
+static int
+prlm_otg_req(PrlMousePriv p, unsigned code)
+{
+    unsigned *r = (unsigned *)p->evbuf;
+    uint32_t actual;
+
+    memset(p->evbuf, 0, 0x1c);
+    r[0] = 1;
+    r[2] = code;
+    return otg_request(&p->link, p->evbuf, 0x1c, 0x1c, &actual);
+}
+
+static int
+prlm_tis_register(PrlMousePriv p)
+{
+    unsigned char *b = p->evbuf;
+    unsigned *h = (unsigned *)b;
+    uint32_t pos = 0x1c, total = 0, seq = 0;
+    unsigned toolinfo[10];
+    const char *name = "parallels.SlidingMouse.guest.lin";
+    const char *desc = "Mouse Synchronization Tool";
+    const char *val = "initialized";
+    unsigned ver[2] = {1, 3};
+    uint32_t actual;
+    int i;
+
+    memset(b, 0, 512);
+    memset(toolinfo, 0, sizeof(toolinfo));
+    toolinfo[0] = 0xc; toolinfo[1] = 2; toolinfo[2] = 0xa28f;
+    ((unsigned char *)toolinfo)[0xc] = 1;
+    ((unsigned char *)toolinfo)[0xf] = 0x80;
+    toolinfo[4] = 1;
+    toolinfo[6] = 0x3041a28f;
+    ((unsigned char *)toolinfo)[0x1c] = 9;
+
+#define TIS(tag_, d_, len_) do { \
+    unsigned *e = (unsigned *)(b + pos); \
+    e[0] = (len_); e[1] = (tag_); e[2] = seq++; \
+    if (len_) memcpy(e + 3, (d_), (len_)); \
+    pos += 12 + (len_); total += 12 + (len_); \
+} while (0)
+    TIS(0x2001, ver, 8);
+    TIS(0x20ca, desc, strlen(desc));
+    TIS(0x20cb, toolinfo, 40);
+    TIS(0x20cc, val, strlen(val));
+    TIS(0x2191, name, strlen(name));
+#undef TIS
+    h[0] = 0xe; h[1] = 0; h[2] = 1; h[3] = 0;
+    h[4] = total; h[5] = 0x1000;
+    return otg_request(&p->link, b, pos, 0, &actual);
+}
+
+static int
+prlm_sliding_enable(PrlMousePriv p)
+{
+    unsigned *r;
+
+    if (otg_open(&p->link))
+        return -1;
+    if (prlm_tis_register(p))
+        return -2;
+    if (prlm_otg_req(p, 1))          /* enable */
+        return -3;
+    if (prlm_otg_req(p, 7))          /* proto version query */
+        return -4;
+    r = (unsigned *)p->evbuf;
+    p->batch = (int)r[3] != 0;
+    p->sliding_on = 1;
+    return 0;
+}
+
+/* poll host state; returns 0 and fills dims/abs when served */
+static int
+prlm_sliding_poll(PrlMousePriv p)
+{
+    unsigned short *q;
+
+    if (!p->sliding_on)
+        return -1;
+    if (prlm_otg_req(p, 2))
+        return -2;
+    q = (unsigned short *)(p->evbuf + 0x0c);
+    p->abs_x = q[1];
+    p->abs_y = q[2];
+    p->dim_w = q[3];
+    p->dim_h = q[4];
+    if (!p->logged && p->dim_w > 1) {
+        p->logged = 1;
+        xf86Msg(X_INFO, PRLM_NAME ": host sliding ACTIVE dims=%ux%u\n",
+                p->dim_w, p->dim_h);
+    }
+    return 0;
+}
 
 static XF86ModuleVersionInfo prlm_version_rec = {
     PRLM_NAME,
@@ -55,13 +164,18 @@ _X_EXPORT InputDriverRec PRLMOUSE = {
     0                   /* refCount */
 };
 
-static XF86ModuleData prlm_module_data = {
+static pointer
+prlm_setup(pointer module, pointer opts, int *errmaj, int *errmin)
+{
+    xf86AddInputDriver(&PRLMOUSE, module, 0);
+    return module;
+}
+
+_X_EXPORT XF86ModuleData prlmouseModuleData = {
     &prlm_version_rec,
-    NULL,               /* setup */
+    prlm_setup,
     NULL                /* teardown */
 };
-
-_X_EXPORT XF86ModuleData *prlmouseModuleData = &prlm_module_data;
 
 /* ---- device control ------------------------------------------------- */
 
@@ -77,17 +191,28 @@ prlm_device_on(InputInfoPtr pInfo)
                 strerror(errno));
         return !Success;
     }
-    /* parity with the original: R+O_RDWR — write() is the control
-     * channel for absolute-mode negotiation (magic pending RE) */
     xf86Msg(X_INFO, "%s: opened %s (fd %d)\n", PRLM_NAME, path, pInfo->fd);
     pInfo->read_input = prlm_read_input;
     xf86FlushInput(pInfo->fd);
+
+    if (!pInfo->private) {
+        pInfo->private = calloc(1, sizeof(PrlMouseRec));
+        if (pInfo->private) {
+            int rc = prlm_sliding_enable(((PrlMousePriv)pInfo->private));
+
+            xf86Msg(X_INFO, "%s: sliding session %s (rc=%d batch=%d)\n",
+                    PRLM_NAME, rc == 0 ? "ENABLED" : "unavailable",
+                    rc, rc == 0 ? (((PrlMousePriv)pInfo->private))->batch : 0);
+        }
+    }
+    xf86AddEnabledDevice(pInfo);
     return Success;
 }
 
 static void
 prlm_device_off(InputInfoPtr pInfo)
 {
+    xf86RemoveEnabledDevice(pInfo);
     if (pInfo->fd >= 0) {
         close(pInfo->fd);
         pInfo->fd = -1;
@@ -99,13 +224,18 @@ prlm_read_input(InputInfoPtr pInfo)
 {
     unsigned char buf[24 * 64];
     int n;
+    PrlMousePriv p = (PrlMousePriv)pInfo->private;
 
+    /* drain the evdev fd first (it is also the poll heartbeat), then
+     * fetch the host sliding state and post absolute when served */
     while ((n = read(pInfo->fd, buf, sizeof(buf))) > 0) {
         int recs = n / 24;
-        int i;
+        int i, dx = 0, dy = 0, dz = 0, dw = 0;
 
         if (n % 24)
             continue;
+        /* accumulate the whole batch, post once — per-event posting runs
+         * pointer acceleration per delta and makes movement jittery */
         for (i = 0; i < recs; i++) {
             unsigned char *e = buf + i * 24;
             unsigned short type = *(unsigned short *)(e + 16);
@@ -115,13 +245,13 @@ prlm_read_input(InputInfoPtr pInfo)
             /* struct input_event on 64-bit: timeval(16) type code value */
             if (type == EV_REL) {
                 if (code == REL_X)
-                    xf86PostMotionEvent(pInfo->dev, TRUE, 0, 1, value);
+                    dx += value;
                 else if (code == REL_Y)
-                    xf86PostMotionEvent(pInfo->dev, TRUE, 1, 1, value);
+                    dy += value;
                 else if (code == REL_WHEEL)
-                    xf86PostMotionEvent(pInfo->dev, FALSE, 2, 1, value);
+                    dz += value;
                 else if (code == REL_HWHEEL)
-                    xf86PostMotionEvent(pInfo->dev, FALSE, 3, 1, value);
+                    dw += value;
             } else if (type == EV_KEY) {
                 int btn;
                 switch (code) {
@@ -136,8 +266,29 @@ prlm_read_input(InputInfoPtr pInfo)
                     xf86PostButtonEvent(pInfo->dev, FALSE, btn,
                                         value != 0, 0, 0);
             }
-            /* EV_ABS / capture transitions: pending reverse engineering */
         }
+        if (dx || dy)
+            xf86PostMotionEvent(pInfo->dev, FALSE, 0, 2, dx, dy);
+        if (dz)
+            xf86PostMotionEvent(pInfo->dev, FALSE, 2, 1, dz);
+        if (dw)
+            xf86PostMotionEvent(pInfo->dev, FALSE, 3, 1, dw);
+    }
+
+    if (p && p->sliding_on && prlm_sliding_poll(p) == 0 &&
+        p->dim_w > 1 && p->dim_h > 1) {
+        int x = p->abs_x, y = p->abs_y;
+        ScreenPtr scr = miPointerGetScreen(pInfo->dev);
+
+        if (scr) {                    /* desktop-global -> screen-local */
+            x -= scr->x;
+            y -= scr->y;
+        }
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (x >= (int)p->dim_w) x = p->dim_w - 1;
+        if (y >= (int)p->dim_h) y = p->dim_h - 1;
+        xf86PostMotionEvent(pInfo->dev, TRUE, 0, 2, x, y);
     }
 }
 
@@ -167,10 +318,10 @@ prlm_device_control(DeviceIntPtr dev, int what)
             return !Success;
         xf86InitValuatorAxisStruct(dev, 0, 0,
                                    NO_AXIS_LIMITS, NO_AXIS_LIMITS,
-                                   0, 0, 0, Absolute);
+                                   0, 0, 0, Relative);
         xf86InitValuatorAxisStruct(dev, 1, 0,
                                    NO_AXIS_LIMITS, NO_AXIS_LIMITS,
-                                   0, 0, 0, Absolute);
+                                   0, 0, 0, Relative);
         xf86InitValuatorAxisStruct(dev, 2, 0,
                                    NO_AXIS_LIMITS, NO_AXIS_LIMITS,
                                    0, 0, 0, Relative);
@@ -206,6 +357,7 @@ prlm_pre_init(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
     pInfo->read_input = prlm_read_input;
     pInfo->switch_mode = 0;
     pInfo->fd = -1;
+    pInfo->type_name = XI_MOUSE;
     pInfo->flags = XI86_SEND_CORE_EVENTS;
 
     xf86CollectInputOptions(pInfo, NULL);

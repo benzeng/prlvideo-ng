@@ -3,8 +3,8 @@ LDFLAGS = -shared
 
 all: prlmouse_drv.so
 
-prlmouse_drv.so: prlmouse.c
-	$(CC) $(CFLAGS) -o $@ prlmouse.c $(LDFLAGS)
+prlmouse_drv.so: prlmouse.c otg.c
+	$(CC) $(CFLAGS) -I. -o $@ prlmouse.c otg.c $(LDFLAGS)
 
 install: prlmouse_drv.so
 	install -m 755 prlmouse_drv.so /usr/lib/xorg/modules/input/
