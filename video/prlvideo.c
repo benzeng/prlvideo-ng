@@ -94,6 +94,9 @@ typedef struct {
     Bool share_opt;              /* Option ShareState, parsed in PreInit */
     Bool otg_display_pending;    /* sender thread opens the OTG session */
     struct otg_link otglink;
+    int kick_fd;                /* second vtg fd for the kicker thread */
+    pthread_t kick_thread;
+    Bool kick_started;
 
     DamagePtr damage;
     xf86CursorInfoPtr cursor_info;
@@ -856,6 +859,26 @@ prlm_otg_display_session(PrlPtr pPrl)
     xf86Msg(X_INFO, PRL_NAME ": OTG display session rc=%d\n", rc);
 }
 
+/* kicker thread: a second vtg fd writing heartbeat shares — every
+ * arrival completes the main sender's pending write (and vice versa);
+ * single-fd writes serialize, so two fds in two threads kick each
+ * other forever */
+static void *
+prl_kick_thread(void *arg)
+{
+    PrlPtr pPrl = arg;
+    sigset_t set;
+
+    sigfillset(&set);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+    while (pPrl->thread_run) {
+        prl_send_share_state(pPrl, 0x3fff, 0x3fff, 0xc000, 0xc000,
+                             960, 600);
+        usleep(16000);            /* ~60Hz heartbeat */
+    }
+    return NULL;
+}
+
 static void *
 prl_share_thread(void *arg)
 {
@@ -884,6 +907,12 @@ prl_share_thread(void *arg)
 
     RegionInit(&dirty, (BoxPtr)NULL, 0);
     while (pPrl->thread_run) {
+    /* alternate fds: a write on the other fd completes this fd's
+     * pending request (the toolgate completes on NEW arrivals;
+     * same-fd writes serialize instead). Two threads, one fd each:
+     * every arrival completes the OTHER fd's pending write. */
+    if (pPrl->kick_started)
+        pthread_kill(pPrl->kick_thread, 0);
         pthread_mutex_lock(&pPrl->lock);
         if (pPrl->dirty_pending) {
             RegionUnion(&dirty, &dirty, &pPrl->pending_dirty);
@@ -1354,6 +1383,12 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
                 pPrl->thread_started = TRUE;
                 xf86Msg(X_INFO, PRL_NAME ": sender thread started "
                         "(ShareState enabled)\n");
+                /* the kicker needs its OWN fd — same-fd writes serialize */
+                pPrl->kick_fd = open(PRL_VTG_PATH, O_WRONLY);
+                if (pPrl->kick_fd >= 0 &&
+                    pthread_create(&pPrl->kick_thread, NULL,
+                                   prl_kick_thread, pPrl) == 0)
+                    pPrl->kick_started = TRUE;
             } else {
                 pPrl->thread_run = FALSE;
                 xf86Msg(X_WARNING, PRL_NAME ": sender thread create failed\n");
