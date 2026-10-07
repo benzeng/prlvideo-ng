@@ -27,6 +27,7 @@
 #include "cursorstr.h"
 #include "randrstr.h"
 #include "extnsionst.h"
+#include "otg.h"
 #include <pthread.h>
 #include <sys/io.h>
 #include <sys/mman.h>
@@ -1132,13 +1133,35 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
 
     stride = (unsigned)pScrn->displayWidth * 4;
 
-    /* NO host mode-set here: programming the VGA extended sequencer
-     * switches the host display pipeline from continuous VESA scanout
-     * (boot mode, always live) into read-once + SHARE_STATE mode, which
-     * freezes the picture unless a live consumer takes our dirty
-     * notifications.  The boot mode already matches fb0 geometry. */
+    /* Full display lifecycle, OUR connection becomes the host consumer:
+     * GL_VERSION (PreInit) -> mode-set here -> share-states thread
+     * (starts at the end of ScreenInit).  The mode-set flips the host
+     * into compositor mode; the thread's tight loop is the mailbox that
+     * keeps recomposite flowing — replicating the original driver. */
     xf86Msg(X_INFO, PRL_NAME ": ScreenInit w=%d h=%d stride=%u off=0x%x\n",
             pScrn->displayWidth, pScrn->virtualY, stride, pPrl->fb_offset);
+    prl_vga_mode(32, (unsigned)pScrn->displayWidth,
+                 (unsigned)pScrn->virtualY, stride, pPrl->fb_offset);
+
+    /* OTG display session: DynRes enable + max-heads report (the
+     * original EnterVT chain — the host's "monitor ready" gate) */
+    {
+        static struct otg_link olink;
+        unsigned char ob[64] __attribute__((aligned(8)));
+        unsigned *o = (unsigned *)ob;
+        uint32_t actual;
+        int rc = otg_open(&olink);
+
+        if (rc == 0) {
+            memset(ob, 0, 28);
+            o[0] = 0xb; o[2] = 5; o[3] = 1;      /* max heads = 1 */
+            otg_request(&olink, ob, 0x1c, 0, &actual);
+            memset(ob, 0, 28);
+            o[0] = 0xb; o[3] = 0;                /* DynRes enable */
+            otg_request(&olink, ob, 0x1c, 0, &actual);
+        }
+        xf86Msg(X_INFO, PRL_NAME ": OTG display session rc=%d\n", rc);
+    }
     xf86Msg(X_INFO, PRL_NAME ": calling fbScreenInit\n");
 
     /* VRAM direct mapping (fb_offset=0): writes go straight to host

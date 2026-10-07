@@ -591,3 +591,27 @@ BTN_LEFT（0x110）到达 guest；右键=双指点按由宿主转换。
 
 丝滑度上限：宿主以 PS/2 协议注入（~80Hz），X 侧调参改善步进感
 但不改变频率；穿越特性激活后绝对坐标流会显著升级。
+
+## 🔬 宿主侧 prl_vm_app 静态判据（2026-10-07 晚，绕过 Ghidra 的轻量逆向）
+
+Mach-O 手工解析（段映射 + RIP 相对引用扫描 + 局部 objdump），
+避开 Ghidra 全量分析的超时：
+
+**SendVesaTrackPagesRequest @ 0x1000b3df0**（宿主→guest 脏页跟踪请求）：
+- "monitor not ready" 判定：`this->[0x1938]==NULL`（显示器对象）或
+  `this->[0xa4] <= 13`（状态机）
+- 请求载荷存入 `[0x1938]->[0x3d818]`，经 SendToVcpu(0x200000) 发送：
+  共享内存 0xd000 位图锁（lock cmpxchg）+ KickVcpu（"KickVcpu
+  failed"/"SendVcpuSignal" 错误串佐证）
+- 完成标志 [0x10998] 由 guest 应答路径回写；250ms 超时未应答 =
+  "a request is lost"
+- **结论：宿主一直在发请求，guest 内核侧无人应答**——应答者是
+  prl_tg 模块中需要 userspace 初始化激活的路径（keeper 的原版
+  驱动生命周期恰好激活了它——这就是"开门"的真相）
+
+**keeper 最终判决**：消费者绑定完成生命周期的连接（keeper 的黑屏
+成为 VM 的"画面"）；CPU 限流可解功耗但显示绑定不可解 → 路线关闭。
+
+**自持配方（终版状态）**：模式设定 + OTG 显示会话在 Xorg 主线程
+会停摆（OTG 请求挂起 = ScreenInit 卡死）——需挪到发送线程。这是
+下一次继续时的第一件事。
