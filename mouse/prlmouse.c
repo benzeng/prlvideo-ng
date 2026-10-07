@@ -45,6 +45,9 @@ typedef struct {
     int last_buttons;
     int logged;
     int evdev_active;
+    volatile unsigned cell[2] __attribute__((aligned(8)));  /* host-written mouse cell */
+    unsigned code, z;
+    unsigned scr_w, scr_h;
     unsigned char evbuf[0xfe8];
 } PrlMouseRec, *PrlMousePriv;
 static int prlm_pre_init(InputDriverPtr drv, InputInfoPtr pInfo, int flags);
@@ -123,6 +126,37 @@ prlm_sliding_enable(PrlMousePriv p)
     r = (unsigned *)p->evbuf;
     p->batch = (int)r[3] != 0;
     p->sliding_on = 1;
+
+    /* console session completion (host FUN_1000d7af0): without these
+     * the console never activates — dims stay 0, HWC stays unsupported,
+     * and the PET_IO flags tell the client the console owns the
+     * pointer (killing keyboard+mouse delivery) */
+    {
+        unsigned char *b = p->evbuf;
+        unsigned *q = (unsigned *)b;
+        uint32_t actual;
+
+        /* cmd 4: monitor rect {x,y,x2,y2} + cursor {w,h,data[w*h*4]}
+         * (w,h are CURSOR dims, must be < 0x81; this fills the console
+         * state buffer — the activation gate) */
+        {
+            unsigned char lb[0x28 + 64 * 64 * 4] __attribute__((aligned(8)));
+            unsigned *l = (unsigned *)lb;
+
+            memset(lb, 0, sizeof(lb));
+            l[0] = 1; l[2] = 4;
+            *(unsigned *)(lb + 0x10) = 0;            /* x */
+            *(unsigned *)(lb + 0x14) = 0;            /* y */
+            *(unsigned *)(lb + 0x18) = p->scr_w;     /* x2 */
+            *(unsigned *)(lb + 0x1c) = p->scr_h;     /* y2 */
+            *(unsigned *)(lb + 0x20) = 32;           /* cursor w */
+            *(unsigned *)(lb + 0x24) = 32;           /* cursor h */
+            /* 32x32 transparent ARGB cursor at +0x28 (all zeros) */
+            if (otg_request(&p->link, lb, 0x28 + 32 * 32 * 4, 0x10, &actual))
+                return -6;
+        }
+
+    }
     return 0;
 }
 
@@ -137,21 +171,19 @@ prlm_sliding_poll(PrlMousePriv p)
     if (prlm_otg_req(p, 2))
         return -2;
     q = (unsigned short *)(p->evbuf + 0x0c);
+    p->code = q[0];
     p->abs_x = q[1];
     p->abs_y = q[2];
     p->dim_w = q[3];
     p->dim_h = q[4];
+    p->z = q[5];
     if (!p->logged && p->dim_w > 1) {
         p->logged = 1;
         xf86Msg(X_INFO, PRLM_NAME ": host sliding ACTIVE dims=%ux%u\n",
                 p->dim_w, p->dim_h);
     }
-    /* torn reads happen (host sampled 1292x10 mid-mode-set once);
-     * absolute only for plausible geometry */
-    if (p->dim_w < 640 || p->dim_h < 480) {
-        p->dim_w = 0;
-        p->dim_h = 0;
-    }
+    /* dims here are the console cursor-dims echo: any value > 1 means
+     * the console session is ALIVE (original driver's check) */
     return 0;
 }
 
@@ -203,7 +235,17 @@ prlm_wakeup_timer(OsTimerPtr timer, CARD32 now, pointer arg)
 
     (void)timer; (void)now;
     if (p && p->sliding_on && !p->evdev_active) {
-        if (prlm_sliding_poll(p) == 0 && p->dim_w > 640 && p->dim_h > 480) {
+        int prc = 0;   /* OTG from the MAIN thread stalls the loop —
+                          polls only happen in read_input (input thread) */
+        p->dim_w = p->dim_w;  /* keep fields untouched */
+
+        if (p && p->logged < 6) {
+            p->logged++;
+            xf86Msg(X_INFO, PRLM_NAME ": poll#%d rc=%d c=%u abs=%u,%u dims=%ux%u Z=%d cell=%u,%u\n",
+                    p->logged, prc, p->code, p->abs_x, p->abs_y,
+                    p->dim_w, p->dim_h, p->z, p->cell[0], p->cell[1]);
+        }
+        if (prc == 0 && p->dim_w > 1 && p->dim_h > 1) {
             int x = p->abs_x, y = p->abs_y;
             ScreenPtr scr = miPointerGetScreen(pInfo->dev);
 
@@ -242,11 +284,17 @@ prlm_device_on(InputInfoPtr pInfo)
     if (!pInfo->private) {
         pInfo->private = calloc(1, sizeof(PrlMouseRec));
         if (pInfo->private) {
-            int rc = prlm_sliding_enable(((PrlMousePriv)pInfo->private));
+            PrlMousePriv pp = (PrlMousePriv)pInfo->private;
+            ScrnInfoPtr pScrn = xf86Screens[0];
+            int rc;
+
+            pp->scr_w = (unsigned)pScrn->virtualX;
+            pp->scr_h = (unsigned)pScrn->virtualY;
+            rc = prlm_sliding_enable(pp);
 
             xf86Msg(X_INFO, "%s: sliding session %s (rc=%d batch=%d)\n",
                     PRLM_NAME, rc == 0 ? "ENABLED" : "unavailable",
-                    rc, rc == 0 ? (((PrlMousePriv)pInfo->private))->batch : 0);
+                    rc, rc == 0 ? pp->batch : 0);
         }
     }
     xf86AddEnabledDevice(pInfo);
