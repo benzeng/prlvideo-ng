@@ -644,12 +644,13 @@ prl_ctl_proc(ClientPtr client)
     case 0x1b:                      /* hardware cursor reinit (UT 0x14) */
         xf86Msg(X_INFO, PRL_NAME ": prlcc requests cursor reinit\n");
         return prl_ctl_reply_val(client, 1);
-    case 0x1a:                      /* coherence active query */
+    case 0x1a:                      /* coherence enabled? — OFF by default;
+                                     * 1 sends prlcc's window manager down
+                                     * the coherence path (eats clicks) */
     case 0x09:                      /* coherence agent status */
-    case 0x24:                      /* coherence tracking start */
-        return prl_ctl_reply_val(client, 1);
     case 0x20:                      /* coherence param query */
-        return prl_ctl_reply_val(client, 1);
+    case 0x24:                      /* coherence tracking */
+        return prl_ctl_reply_val(client, 0);
     case 0x0e: {                    /* get visual id {a@4, depth@8} */
         unsigned depth = *(unsigned *)((char *)stuff + 8);
         VisualPtr v;

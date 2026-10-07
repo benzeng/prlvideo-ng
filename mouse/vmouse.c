@@ -31,6 +31,29 @@ int main(int argc, char **argv)
     if (ioctl(fd, UI_DEV_CREATE) < 0) { perror("UI_DEV_CREATE"); return 1; }
     sleep(1);
 
+    if (argc > 2 && !strcmp(argv[2], "click")) {
+        struct input_event ev;
+        sleep(1);
+        memset(&ev, 0, sizeof(ev));
+        ev.type = EV_KEY; ev.code = BTN_LEFT; ev.value = 1;
+        write(fd, &ev, sizeof(ev));
+        memset(&ev, 0, sizeof(ev));
+        ev.type = EV_SYN; ev.code = 0;
+        write(fd, &ev, sizeof(ev));
+        usleep(100000);
+        memset(&ev, 0, sizeof(ev));
+        ev.type = EV_KEY; ev.code = BTN_LEFT; ev.value = 0;
+        write(fd, &ev, sizeof(ev));
+        memset(&ev, 0, sizeof(ev));
+        ev.type = EV_SYN; ev.code = 0;
+        write(fd, &ev, sizeof(ev));
+        sleep(1);
+        ioctl(fd, UI_DEV_DESTROY);
+        close(fd);
+        printf("clicked\n");
+        return 0;
+    }
+
     if (argc > 2 && !strcmp(argv[2], "hold")) {
         /* keep the device alive with periodic movement */
         while (1) {
@@ -48,6 +71,23 @@ int main(int argc, char **argv)
                 ev.type = EV_SYN; ev.code = 0;
                 write(fd, &ev, sizeof(ev));
                 usleep(20000);
+            }
+            /* click once per cycle too */
+            {
+                struct input_event ev;
+                memset(&ev, 0, sizeof(ev));
+                ev.type = EV_KEY; ev.code = BTN_LEFT; ev.value = 1;
+                write(fd, &ev, sizeof(ev));
+                memset(&ev, 0, sizeof(ev));
+                ev.type = EV_SYN; ev.code = 0;
+                write(fd, &ev, sizeof(ev));
+                usleep(50000);
+                memset(&ev, 0, sizeof(ev));
+                ev.type = EV_KEY; ev.code = BTN_LEFT; ev.value = 0;
+                write(fd, &ev, sizeof(ev));
+                memset(&ev, 0, sizeof(ev));
+                ev.type = EV_SYN; ev.code = 0;
+                write(fd, &ev, sizeof(ev));
             }
             sleep(1);
         }

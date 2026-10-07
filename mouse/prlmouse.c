@@ -254,6 +254,8 @@ prlm_read_input(InputInfoPtr pInfo)
                     dw += value;
             } else if (type == EV_KEY) {
                 int btn;
+
+
                 switch (code) {
                 case BTN_LEFT: btn = 1; break;
                 case BTN_MIDDLE: btn = 2; break;
@@ -302,7 +304,7 @@ static Bool
 prlm_device_control(DeviceIntPtr dev, int what)
 {
     InputInfoPtr pInfo = dev->public.devicePrivate;
-    unsigned char map[32];
+    unsigned char map[16];
     int i;
 
     switch (what) {
@@ -310,8 +312,13 @@ prlm_device_control(DeviceIntPtr dev, int what)
         Atom btn_labels[8] = { 0 };
         Atom axes_labels[4] = { 0 };
 
-        for (i = 0; i < 8; i++)
-            map[i] = i + 1;
+        /* dix uses the posted button as an INDEX into this map (verified
+         * empirically: identity-1 map shifted every button up by one,
+         * left-clicks arrived as button 2) — so publish an identity map
+         * for indices 1..8 */
+        map[0] = 8;
+        for (i = 1; i <= 8; i++)
+            map[i] = i;
         if (!InitPointerDeviceStruct(&dev->public, map, 8, btn_labels,
                                      prlm_ptr_ctl, GetMotionHistorySize(),
                                      4, axes_labels))

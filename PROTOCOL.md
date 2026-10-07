@@ -570,3 +570,24 @@ PD 应用分析或宿主动态跟踪（超出 guest 逆向范围）。
 
 **工程教训**：xf86CollectOptions 在无 Screen 段绑定的屏幕上崩溃
 （monitor/confScreen 裸解引用）——改从实体直接读 Device 选项。
+
+## 🖱️ prlmouse-ng 收官（2026-10-07 傍晚）
+
+**生产可用**：移动/点击/拖动/右键（双指）/滚轮全部工作，手感可调
+（ConstantDeceleration 1.5 + VelocityScaling 12 已入 InputClass）。
+
+最后一战的三连坑（全部实证）：
+1. 扩展一致性查询如实回答"未启用"——全答 1 会把 prlcc 的
+   coherence 状态机骗进 seamless 路径，吞掉点击
+2. **dix 把 xf86PostButtonEvent 的 button 参数当作 map 索引**：
+   恒等+1 的 map 把所有按键上移一位（左键变中键！），map 必须
+   发布为恒等（map[0]=8, map[i]=i）
+3. 测试工具纪律：uinput 注入器用完必须杀（两次泄漏造成"幽灵
+   漂移"误诊）；xev -root 对被桌面覆盖的根窗口无效，用
+   xinput test 抓设备级事件
+
+用户环境关键事实：MacBook 触控板经宿主注入，所有点按归一为
+BTN_LEFT（0x110）到达 guest；右键=双指点按由宿主转换。
+
+丝滑度上限：宿主以 PS/2 协议注入（~80Hz），X 侧调参改善步进感
+但不改变频率；穿越特性激活后绝对坐标流会显著升级。
