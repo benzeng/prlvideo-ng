@@ -821,3 +821,35 @@ PD → 启动 VM** 才恢复。杀 lldb ≠ 干净 detach。
 4. 最安全的替代：完全避开 attach——用 vmmap 定位 + /proc 式
    只读（macOS 无 /proc，可用 task_for_pid + mach_vm_read 的
    自写工具，或干脆在 VM 内从 guest 侧推）
+
+## 🎯 控制台激活突破（2026-10-08 21:30）
+
+**零附加探针成功**（actprobe 工具，纯 guest 侧）：
+```
+attach(cmd1) rc=0 sm_ver=1        ← attach 回复 +0x14 确认
+abs 开关(cmd7) rc=0
+0x8100 激活探针 st=0              ← CONSOLE ACTIVE！
+批获取({1,8}) 0 事件              ← 事件未流入
+PS/2 evdev 0 事件                 ← 绝对路由已接管输入
+状态查询(cmd3) attached+sm_ver=1 稳定
+```
+
+**第三个对齐 bug（历史性）**：内核 INLINE_SIZE 把 28 字节内联
+向上对齐到 32（(28+7)&~7），缓冲描述符必须在 header+32 而非
++28。我们驱动里所有带缓冲的 0x8100 因此静默 ENOMEM——
+actprobe 修正后立即激活成功。
+
+**激活配方（guest 侧完整，已验证）**：
+1. OTG attach {1,0,1} → sm_ver@reply+0x14
+2. OTG cmd 7（绝对路由开关）
+3. 0x8100 光标声明（inline 28B + 描述符@+32 + ARGB 光标面）
+   → st=0 即 ACTIVE
+
+**剩余唯一谜题**：激活后 Mac 客户端不向 tablet 队列发事件
+（批获取 0 条 + PS/2 停 = 事件消失在宿主内部）。两个候选：
+a) Mac 客户端收到 PET_IO_SLIDING_MOUSE_FLAG 后停止发送，
+   等 mode 2（需客户端主动切换，guest 无法强制）
+b) 事件走 20ms cell 轮询（FUN_1004307f0，mode==2 才启动）
+
+**工具链**：actprobe（激活+批获取观测）、cellwatch（状态查询）、
+release（会话清除，恢复 PS/2）——三件套纯 guest 侧零附加。
