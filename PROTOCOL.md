@@ -891,3 +891,37 @@ actprobe 实验后即使正常退出，宿主的绝对路由残留（缓慢左�
 再现）。prl-console-release 立即修复。**结论：actprobe 用完必须
 立即 release**——已把 release 调用写进工具尾部（待下版）。这是
 cmd 7 全局标志的宿主侧生命周期，guest 侧 OTG 链关闭不触发清理。
+
+## 🖱️ Mac UI 客户端之夜（2026-10-08 22:00-22:40）
+
+**Mac 侧发送架构定位**：
+```
+prl_event_tap（CGEventTap 守护，unix socket 服务端）
+  ↕ /var/tmp/prl_event_tap.socket_501
+prl_naptd + prl_graphics_switcher（对端）
+prl_client_app（37MB，VM 窗口 UI，真正的 0x30dac 发送方）
+prl_vm_app（接收方）
+```
+
+**prl_client_app 滑动鼠标状态机（字符串定案）**：
+- vmSlidingMouseStatusChanged / onSlidingMouseStatusChanged
+  （订阅 PET_IO_SLIDING_MOUSE_FLAG）
+- CAbsoluteMouseGrabber / CRelativeMouseGrabber（两种抓取器）
+- 判定链："Can't grab sliding mouse since it is not over any
+  input grabber"——滑动抓取需要光标位于输入抓取器（VM 窗口
+  鼠标区）之上且 appIsActive（"isHovered: mouseArea.enabled &&
+  containsMouse && !pressed && appIsActive"）
+- "Sliding mouse active: %d" 状态日志
+- ChrCannotStartReason_SlidingMouseOFF/Disabled 失败原因
+
+**TIS 版本实验**：ver=0xC0201(12.2.1) rc=0 接受但事件仍 0——
+版本不是钥匙（或不止版本）。
+
+**下次靶点**：
+1. prl_client_app 的完整反编译（37MB，同 Ghidra 流水线）——
+   重点：onSlidingMouseStatusChanged 的处理 + 从 FLAG 到
+   CAbsoluteMouseGrabber 启用的条件链
+2. 系统日志观察：探针激活瞬间 prl_client_app 是否打印
+   "Process sliding mouse state change"（用 log stream 实时抓）
+3. isHovered 条件：Mac 光标必须真的悬停在 VM 窗口上——实验时
+   确认窗口焦点状态
