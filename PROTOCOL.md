@@ -884,3 +884,10 @@ real_move: ready 检查 → DAT_1011c374c(abs开关) →
 2. 快照确认：宿主日志 grep "Drop real_move"（若出现=客户端在
    发但设备 not ready；若无=客户端根本没发）
 3. VIRTUAL@MOUSE USB 设备的创建条件（PD 偏好/工具版本门槛）
+
+## ⚠️ 残留状态复现（2026-10-08 21:50）
+
+actprobe 实验后即使正常退出，宿主的绝对路由残留（缓慢左漂症状
+再现）。prl-console-release 立即修复。**结论：actprobe 用完必须
+立即 release**——已把 release 调用写进工具尾部（待下版）。这是
+cmd 7 全局标志的宿主侧生命周期，guest 侧 OTG 链关闭不触发清理。
