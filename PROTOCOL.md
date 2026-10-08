@@ -853,3 +853,34 @@ b) 事件走 20ms cell 轮询（FUN_1004307f0，mode==2 才启动）
 
 **工具链**：actprobe（激活+批获取观测）、cellwatch（状态查询）、
 release（会话清除，恢复 PS/2）——三件套纯 guest 侧零附加。
+
+## 🔬 事件流追踪之夜（2026-10-08 21:00-21:45）
+
+**prlcc 在场重测**：激活成功（st=0）但批获取仍 0 事件——prlcc 不是缺失变量。
+
+**事件路由完整链条（反编译定案）**：
+```
+Mac UI 发 0x30dac(mouse move) → FUN_100091600:
+  USB 虚拟鼠标存在且 ready → CUsbMouse::real_move
+  否则 → CPs2Mouse::real_move（vm+0x10810）
+real_move: ready 检查 → DAT_1011c374c(abs开关) →
+  开: 归一化坐标(0..0x7fff)入 tablet SPSC 队列(vmDev+0x2f350)
+      ← 批获取({1,8})应在此取到
+  关: PS/2 4字节包入 i8042 环(vmDev+0x2f228)
+```
+
+**guest USB 树实况**：无 VIRTUAL@MOUSE（203a:fffc）设备——只有
+摄像头(fff9)和打印机(fffa)。SARE 日志 (0->0) 是快照恢复记录，
+非创建路径。CUsbMouse 的 ready 检查永远 fail → 一切走 PS/2 鼠标。
+
+**剩余唯一假设**：Mac UI 收到 PET_IO_SLIDING_MOUSE_FLAG 后完全
+停止发送（"guest 接管指针"），只在 Mac 光标位于 VM 窗口内时发
+绝对位置——而它判定"滑动鼠标可用"可能依赖 TIS 记录里的工具
+版本字段（我们的 toolInfo 版本=1，实际 PD 12.2.1 内部版本更高）。
+
+**下次靶点（按优先级）**：
+1. TIS toolInfo 版本字段实验（toolInfo[4] 从 1 提到实际版本号
+   如 12.2.1.41615 或小版本序列）→ 观察 Mac UI 是否开始发送
+2. 快照确认：宿主日志 grep "Drop real_move"（若出现=客户端在
+   发但设备 not ready；若无=客户端根本没发）
+3. VIRTUAL@MOUSE USB 设备的创建条件（PD 偏好/工具版本门槛）
