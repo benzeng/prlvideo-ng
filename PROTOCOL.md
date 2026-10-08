@@ -962,3 +962,43 @@ bitmask）。宿主在 console attach/release 时经 FUN_100430270 发出。
    change" 是否出现 + 全部 flag 值
 2. 若未到达 → 宿主侧 FUN_100430270 的发送条件（console+0x38
    之外可能还需 +0x40 "sliding available" = cmd4/10 激活后设置）
+
+## 🚩 FLAG 发射条件定案（2026-10-08 23:50）
+
+**verbose 实验**：defaults Log.Level=4 + 客户端重启 → 仍零
+HID_CTL 日志。客户端日志系统（FUN_100df99c0）不走 macOS
+unified log——自有输出通道（文件位置待查，可能 stderr 或
+~/Library/Logs 下的独立文件）。
+
+**FLAG (0x1895e) 发射条件全图**（4 个调用者，全部一致）：
+```
+FUN_100430270(iodesktop, value) —— 发送 PET_IO_SLIDING_MOUSE_FLAG
+调用前提：console+0x40 (sliding_available) == 0 时才发！
+  console attach/release (cmd 0/1/5/6)
+  USB 鼠标在场状态变化 (FUN_1000d7a90 ← 5 个 USB 事件)
+  sliding_available 翻转 (FUN_1000d79e0)
+  cell 映射变化 (FUN_1000d8510)
+```
+
+**sliding_available (+0x40) 的设置者**：FUN_1000d79e0(console,
+banks!=0) ← VGA 模式探测（FUN_1002a9af0）——**guest 有 banked
+framebuffer 时 sliding_available=1，此时 FLAG 不发**（因为它
+已经是"available"状态，FLAG 只在状态翻转时才有意义）。
+
+**逻辑链推演**：
+guest console attach → bit0 置位 → 如果 sliding_available==0 → 
+发 FLAG(带 bit0) → 客户端 vm+0xa8=1 → updateMouseType 检查
+全部条件 → 绝对模式切换。
+如果 sliding_available==1（guest 已有 fb） → 不发 FLAG → 
+客户端不知道 guest 支持 → 永远不发鼠标事件。
+
+**这可能就是设计**：sliding_available=1 意味着 guest 有
+share-state 会话（0x8117 注册过），此时鼠标走 tablet 队列
+（guest 自己批获取），不需要 FLAG 通知客户端切模式。
+
+**下次实验方向修正**：不发 cmd 7（abs 开关），让
+sliding_available 保持 0 → FLAG 会发出 → 客户端进入
+"Absolute" 模式 → 客户端自己发 SWITCH_SLIDING_MOUSE(0x30dc6)
+→ console mode 变 1（简单模式，不需要 cell）→ 鼠标事件经
+CPs2Mouse::real_move 以绝对坐标注入 PS/2 → **不需要批获取**！
+（原版驱动的 {1,0,2} 轮询就是在 PS/2 流上取绝对位置）
