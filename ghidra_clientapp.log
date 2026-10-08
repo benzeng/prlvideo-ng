@@ -1,0 +1,469 @@
+openjdk version "25.0.4.1" 2026-08-18
+OpenJDK Runtime Environment (build 25.0.4.1+1-1-Debian)
+OpenJDK 64-Bit Server VM (build 25.0.4.1+1-1-Debian, mixed mode)
+INFO  Using log config file: jar:file:/usr/share/ghidra/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: /root/.config/ghidra/ghidra_12.1.3_DEV/application.log (LoggingInitialization)  
+INFO  Loading user preferences: /root/.config/ghidra/ghidra_12.1.3_DEV/preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (1729 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: NativePRNGNonBlocking (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (3756 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::staticFieldOffset has been called by org.apache.felix.framework.util.SecureAction (file:/usr/share/ghidra/Ghidra/Features/Base/lib/org.apache.felix.framework-7.0.5.jar)
+WARNING: Please consider reporting this to the maintainers of class org.apache.felix.framework.util.SecureAction
+WARNING: sun.misc.Unsafe::staticFieldOffset will be removed in a future release
+INFO  HEADLESS Script Paths:
+    /usr/share/ghidra/Ghidra/Processors/8051/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/DecompilerDependent/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/GnuDemangler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/BytePatterns/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/FileFormats/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/Base/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/PDB/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/WildcardAssembler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/Atmel/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/JVM/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/SwiftDemangler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/DATA/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/SystemEmulation/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/BSim/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/PyGhidra/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/Decompiler/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Debug/Debugger-rmi-trace/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Features/FunctionID/ghidra_scripts
+    /tmp
+    /usr/share/ghidra/Ghidra/Features/VersionTracking/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Debug/Debugger/ghidra_scripts
+    /usr/share/ghidra/Ghidra/Processors/PIC/ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Creating project: /home/dong/prlvideo-ng/ghidra_proj/clientapp (HeadlessAnalyzer)  
+INFO  Creating project: /home/dong/prlvideo-ng/ghidra_proj/clientapp (DefaultProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: /home/dong/prlvideo-ng/ghidra_proj/clientapp (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///home/dong/prlvideo-ng/prl_client_app (HeadlessAnalyzer)  
+INFO  Using Loader: Mac OS X Mach-O (ProgramLoader)  
+INFO  Using Language/Compiler: x86:LE:64:default:gcc (ProgramLoader)  
+INFO  Using Library Search Path: [., /bin, /lib, /lib64, /lib/x86_64-linux-gnu, /lib/aarch64-linux-gnu, /usr/bin, /usr/lib, /usr/X11R6/bin, /usr/X11R6/lib, /usr/java/packages/lib, /usr/lib/x86_64-linux-gnu/jni, /usr/lib/x86_64-linux-gnu, /usr/lib/jni] (ProgramLoader)  
+INFO  Additional info:
+Loading file:///home/dong/prlvideo-ng/prl_client_app?MD5=3a1fc6e1d6d68de811bb5ad3bf1e2362...
+------------------------------------------------
+
+Linking the External Programs of 'prl_client_app' to imported libraries...
+  [/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices] -> not found in project
+  [/System/Library/Frameworks/Security.framework/Versions/A/Security] -> not found in project
+  [/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation] -> not found in project
+  [/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration] -> not found in project
+  [/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit] -> not found in project
+  [/System/Library/Frameworks/DirectoryService.framework/Versions/A/DirectoryService] -> not found in project
+  [/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation] -> not found in project
+  [/System/Library/Frameworks/DiskArbitration.framework/Versions/A/DiskArbitration] -> not found in project
+  [/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC] -> not found in project
+  [/usr/lib/libSystem.B.dylib] -> not found in project
+  [/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices] -> not found in project
+  [/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation] -> not found in project
+  [/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia] -> not found in project
+  [/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio] -> not found in project
+  [@rpath/libPrlSdkCommunication.1.dylib] -> not found in project
+  [/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon] -> not found in project
+  [/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit] -> not found in project
+  [@rpath/libPrlGui.2.dylib] -> not found in project
+  [/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation] -> not found in project
+  [/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate] -> not found in project
+  [/System/Library/Frameworks/Cocoa.framework/Versions/A/Cocoa] -> not found in project
+  [/usr/lib/libz.1.dylib] -> not found in project
+  [@rpath/libPrlXmlModel.1.dylib] -> not found in project
+  [@rpath/ParallelsVirtualizationSDK.framework/Versions/6/libprl_sdk.6.dylib] -> not found in project
+  [@rpath/libAbstractTask.1.dylib] -> not found in project
+  [/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore] -> not found in project
+  [@rpath/PDControlCenter.framework/Versions/A/PDControlCenter] -> not found in project
+  [@rpath/PDCocoaKit.framework/Versions/A/PDCocoaKit] -> not found in project
+  [/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox] -> not found in project
+  [/System/Library/Frameworks/AddressBook.framework/Versions/A/AddressBook] -> not found in project
+  [/System/Library/Frameworks/Quartz.framework/Versions/A/Quartz] -> not found in project
+  [/System/Library/Frameworks/WebKit.framework/Versions/A/WebKit] -> not found in project
+  [@rpath/QtDeclarative.framework/Versions/5/QtDeclarative] -> not found in project
+  [@rpath/QtWidgets.framework/Versions/5/QtWidgets] -> not found in project
+  [@rpath/QtGui.framework/Versions/5/QtGui] -> not found in project
+  [@rpath/QtCore.framework/Versions/5/QtCore] -> not found in project
+  [@rpath/QtScript.framework/Versions/5/QtScript] -> not found in project
+  [@rpath/QtSql.framework/Versions/5/QtSql] -> not found in project
+  [@rpath/QtXmlPatterns.framework/Versions/5/QtXmlPatterns] -> not found in project
+  [@rpath/QtNetwork.framework/Versions/5/QtNetwork] -> not found in project
+  [@rpath/QtSvg.framework/Versions/5/QtSvg] -> not found in project
+  [@rpath/QtOpenGL.framework/Versions/5/QtOpenGL] -> not found in project
+  [@rpath/QtMultimedia.framework/Versions/5/QtMultimedia] -> not found in project
+  [@rpath/QtMacExtras.framework/Versions/5/QtMacExtras] -> not found in project
+  [@rpath/QtXml.framework/Versions/5/QtXml] -> not found in project
+  [@rpath/QtConcurrent.framework/Versions/5/QtConcurrent] -> not found in project
+  [/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL] -> not found in project
+  [/System/Library/Frameworks/AGL.framework/Versions/A/AGL] -> not found in project
+  [/usr/lib/libc++.1.dylib] -> not found in project
+  [/System/Library/Frameworks/CFNetwork.framework/Versions/A/CFNetwork] -> not found in project
+  [/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics] -> not found in project
+  [/System/Library/Frameworks/ImageIO.framework/Versions/A/ImageIO] -> not found in project
+  [/usr/lib/libobjc.A.dylib] -> not found in project
+------------------------------------------------
+
+ (ProgramLoader)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  ANALYZING all memory and code: file:///home/dong/prlvideo-ng/prl_client_app (HeadlessAnalyzer)  
+INFO  hit non-returning function, restarting decompiler switch analyzer later (DecompilerSwitchAnalyzer)  
+ERROR Unexpected exception getting Decompiler result (InternalResultListener) java.util.concurrent.ExecutionException: java.lang.ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 1
+	at java.base/java.util.concurrent.FutureTask.report(FutureTask.java:124)
+	at java.base/java.util.concurrent.FutureTask.get(FutureTask.java:193)
+	at generic.concurrent.QResult.<init>(QResult.java:40)
+	at generic.concurrent.FutureTaskMonitor.run(FutureTaskMonitor.java:77)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+Caused by: java.lang.ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 1
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer.findMessages(ObjcMessageAnalyzer.java:324)
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer.fixMsgSendCalls(ObjcMessageAnalyzer.java:370)
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer$1.process(ObjcMessageAnalyzer.java:148)
+	at ghidra.app.plugin.core.analysis.ObjcMessageAnalyzer$1.process(ObjcMessageAnalyzer.java:145)
+	at ghidra.app.decompiler.parallel.DecompilerCallback.process(DecompilerCallback.java:80)
+	at ghidra.app.decompiler.parallel.DecompilerCallback.process(DecompilerCallback.java:41)
+	at generic.concurrent.ConcurrentQ$CallbackCallable.call(ConcurrentQ.java:706)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:328)
+	at generic.concurrent.FutureTaskMonitor.run(FutureTaskMonitor.java:75)
+	... 3 more
+ 
+INFO  Packed database cache: /var/tmp/root-ghidra/packed-db-cache (PackedDatabaseCache)  
+INFO  Applied data type archive: mac_osx (ApplyDataArchiveAnalyzer)  
+WARN  Unable to fully apply external demangled Address Table at 10246fc00: BootDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10246fd00: QException::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10246fe00: CBaseDialog::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 10246ff00: CHelpButton::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470000: CScrollArea::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470100: CSdkRequest::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470200: CVmHardDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470300: QFocusEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470400: QListWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470500: QMainWindow::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470600: QPushButton::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470700: QTreeWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470800: QWizardPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470900: BootingOrder::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470a00: CHwUsbDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470b00: QActionGroup::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470c00: QApplication::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470d00: QButtonGroup::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470e00: CAbstractTask::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102470f00: CDataProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471000: CHwNetAdapter::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471100: CMappingModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471200: CVmFloppyDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471300: CVmProtection::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471400: CVmSerialPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471500: QGestureEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471600: QGraphicsItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471700: QGraphicsView::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471800: QItemDelegate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471900: QWidgetAction::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471a00: CContentWindow::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471b00: CGraphicsFrame::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471c00: CProblemReport::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471d00: CTaskGenericId::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471e00: CVmOpticalDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102471f00: CVmSoundDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472000: QGraphicsScene::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472100: CVmParallelPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472200: QAbstractButton::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472300: QGraphicsWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472400: QListWidgetItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472500: CAppUpdateWorker::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472600: CContentProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472700: CHwGenericDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472800: CSdkCommunicator::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472900: CVmConfiguration::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472a00: CWindowInterface::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472b00: QDeclarativeItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472c00: QDeclarativeView::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472d00: CMessageProcessor::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472e00: QGraphicsRectItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102472f00: CMappingController::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473000: CMessageBoxBuilder::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473100: QAbstractAnimation::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473200: QAbstractItemModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473300: QAbstractListModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473400: QFutureWatcherBase::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473500: QGraphicsItemGroup::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473600: CAbstractWizardPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473700: CSearchParentHelper::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473800: QAbstractTableModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473900: QStyledItemDelegate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473a00: CAbstractWizardModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473b00: CCepStatisticsSender::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473c00: CGraphicsProxyWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473d00: CMappingValueHandler::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473e00: CMessageDataProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102473f00: QFutureInterfaceBase::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474000: QSortFilterProxyModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474100: CDeclarativeWizardPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474200: CProblemReportDelegate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474300: CAbstractWizardPageFlow::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474400: CCepStatisticsCollector::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474500: CVmGenericNetworkAdapter::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474600: CTaskInstallProductUpdate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474700: QDeclarativeImageProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474800: CAbstaractConflictsChecker::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474900: CAbstractProgressOperation::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474a00: CAbstractWizardPageFactory::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474b00: CTaskCheckForProductUpdate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474c00: CDeclarativeWizardProxyPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474d00: QGraphicsSceneDragDropEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474e00: CAbstractWizardActionHandler::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102474f00: CAbstractWizardActionStateProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475000: QFile::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475100: QMenu::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475200: QEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475300: QFrame::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475400: QLabel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475500: QAction::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475600: QDialog::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475700: QObject::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475800: QThread::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475900: QWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475a00: QMenuBar::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475b00: CBaseNode::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475c00: CVmDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475d00: QComboBox::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475e00: QIODevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102475f00: QKeyEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476000: QLineEdit::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476100: QSettings::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476200: char_const*::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476300: std::bad_alloc::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476400: std::exception::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476500: int::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476600: QSpacerItem::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476700: CGraphicsFrame::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476800: CHwHddPartition::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476900: CContentProvider::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476a00: CVmConfiguration::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476b00: CHostHardwareInfo::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476c00: CAbstractWizardPage::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476d00: COsInstallationInfo::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476e00: QUnhandledException::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102476f00: CDeclarativeWizardPage::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477000: CAbstaractConflictsChecker::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477100: CAbstractProgressOperation::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477200: CBaseNode::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477300: __cxxabiv1::__enum_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477400: __cxxabiv1::__class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477500: __cxxabiv1::__si_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477600: __cxxabiv1::__vmi_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477700: std::bad_alloc::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 102477800: std::exception::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::BootDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QException::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CBaseDialog::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CHelpButton::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CScrollArea::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlSdkCommunication.1.dylib::CSdkRequest::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmHardDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtGui.framework/Versions/5/QtGui::QFocusEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QListWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QMainWindow::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QPushButton::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QTreeWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QWizardPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::BootingOrder::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CHwUsbDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QActionGroup::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QApplication::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QButtonGroup::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libAbstractTask.1.dylib::CAbstractTask::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CDataProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CHwNetAdapter::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CMappingModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmFloppyDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmProtection::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmSerialPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGestureEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGraphicsItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGraphicsView::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QItemDelegate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QWidgetAction::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CContentWindow::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CGraphicsFrame::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CProblemReport::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libAbstractTask.1.dylib::CTaskGenericId::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmOpticalDisk::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmSoundDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGraphicsScene::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmParallelPort::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QAbstractButton::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGraphicsWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QListWidgetItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAppUpdateWorker::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CContentProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CHwGenericDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlSdkCommunication.1.dylib::CSdkCommunicator::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmConfiguration::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CWindowInterface::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtDeclarative.framework/Versions/5/QtDeclarative::QDeclarativeItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtDeclarative.framework/Versions/5/QtDeclarative::QDeclarativeView::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CMessageProcessor::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGraphicsRectItem::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CMappingController::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CMessageBoxBuilder::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QAbstractAnimation::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QAbstractItemModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QAbstractListModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QFutureWatcherBase::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGraphicsItemGroup::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractWizardPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CSearchParentHelper::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QAbstractTableModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QStyledItemDelegate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractWizardModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CCepStatisticsSender::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CGraphicsProxyWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CMappingValueHandler::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CMessageDataProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QFutureInterfaceBase::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QSortFilterProxyModel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CDeclarativeWizardPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CProblemReportDelegate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractWizardPageFlow::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CCepStatisticsCollector::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmGenericNetworkAdapter::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CTaskInstallProductUpdate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtDeclarative.framework/Versions/5/QtDeclarative::QDeclarativeImageProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstaractConflictsChecker::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractProgressOperation::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractWizardPageFactory::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CTaskCheckForProductUpdate::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CDeclarativeWizardProxyPage::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QGraphicsSceneDragDropEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractWizardActionHandler::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractWizardActionStateProvider::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QFile::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QMenu::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QFrame::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QLabel::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QAction::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QDialog::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QObject::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QThread::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QWidget::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QMenuBar::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CBaseNode::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmDevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QComboBox::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QIODevice::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtGui.framework/Versions/5/QtGui::QKeyEvent::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QLineEdit::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QSettings::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::char_const*::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::bad_alloc::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::exception::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::int::typeinfo (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtWidgets.framework/Versions/5/QtWidgets::QSpacerItem::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CGraphicsFrame::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CHwHddPartition::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CContentProvider::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CVmConfiguration::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CHostHardwareInfo::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractWizardPage::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::COsInstallationInfo::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/QtCore.framework/Versions/5/QtCore::QUnhandledException::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CDeclarativeWizardPage::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstaractConflictsChecker::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlGui.2.dylib::CAbstractProgressOperation::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: @rpath/libPrlXmlModel.1.dylib::CBaseNode::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__enum_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__si_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::__cxxabiv1::__vmi_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::bad_alloc::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table: /usr/lib/libc++.1.dylib::std::exception::vtable (DemangledAddressTable)  
+INFO  -----------------------------------------------------
+    ASCII Strings                              8.537 secs
+    Apply Data Archives                        2.047 secs
+    CFStrings                                  0.232 secs
+    Call Convention ID                        40.493 secs
+    Call-Fixup Installer                      17.895 secs
+    Create Address Tables                      8.990 secs
+    Create Address Tables - One Time          11.602 secs
+    Create Function                           27.950 secs
+    Data Reference                            15.999 secs
+    Decompiler Switch Analysis               307.527 secs
+    Decompiler Switch Analysis - One Time     57.142 secs
+    Demangler GNU                             20.832 secs
+    Disassemble                               84.836 secs
+    Disassemble Entry Points                  23.613 secs
+    Disassemble Entry Points - One Time        0.054 secs
+    Embedded Media                             1.665 secs
+    External Entry References                  0.031 secs
+    Function ID                               46.086 secs
+    Function Start Pre Search                  2.338 secs
+    Function Start Search                      3.860 secs
+    Function Start Search After Code           3.410 secs
+    Function Start Search After Data           4.268 secs
+    Mach-O Function Starts                     1.766 secs
+    Non-Returning Functions - Discovered      21.490 secs
+    Non-Returning Functions - Known            0.133 secs
+    Objective-C Message Analyzer              20.861 secs
+    Objective-C Type Metadata Analyzer        24.281 secs
+    Reference                                 21.710 secs
+    Scalar Operand References                 60.260 secs
+    Shared Return Calls                       18.185 secs
+    Stack                                    418.495 secs
+    Subroutine References                      9.583 secs
+    Subroutine References - One Time           0.011 secs
+    x86 Constant Reference Analyzer          347.119 secs
+-----------------------------------------------------
+     Total Time   1633 secs
+-----------------------------------------------------
+ (AutoAnalysisManager)  
+INFO  REPORT: Analysis succeeded for file: file:///home/dong/prlvideo-ng/prl_client_app (HeadlessAnalyzer)  
+INFO  REPORT: Execute script: GhidraDecompClient.java  (HeadlessAnalyzer)  
+GhidraDecompClient.java:21: error: <identifier> expected
+                    w.write(r.getDecompiledFunction().getC());
+                           ^
+GhidraDecompClient.java:21: error: <identifier> expected
+                    w.write(r.getDecompiledFunction().getC());
+                                                   ^
+GhidraDecompClient.java:22: error: ')' expected
+                }
+                 ^
+GhidraDecompClient.java:28: error: reached end of file while parsing
+}
+ ^
+skipping /tmp/GhidraDecompClient.java
+ERROR REPORT SCRIPT ERROR: GhidraDecompClient.java : The class could not be found. It must be the public class of the .java file: GhidraDecompClient not found by 171e88 [1] (HeadlessAnalyzer) ghidra.app.script.GhidraScriptLoadException: The class could not be found. It must be the public class of the .java file: GhidraDecompClient not found by 171e88 [1]
+	at ghidra.app.script.JavaScriptProvider.getScriptInstance(JavaScriptProvider.java:114)
+	at ghidra.app.util.headless.HeadlessAnalyzer.runScriptsList(HeadlessAnalyzer.java:915)
+	at ghidra.app.util.headless.HeadlessAnalyzer.analyzeProgram(HeadlessAnalyzer.java:1085)
+	at ghidra.app.util.headless.HeadlessAnalyzer.processFileWithImport(HeadlessAnalyzer.java:1583)
+	at ghidra.app.util.headless.HeadlessAnalyzer.processWithLoader(HeadlessAnalyzer.java:1743)
+	at ghidra.app.util.headless.HeadlessAnalyzer.processWithImport(HeadlessAnalyzer.java:1684)
+	at ghidra.app.util.headless.HeadlessAnalyzer.processWithImport(HeadlessAnalyzer.java:1768)
+	at ghidra.app.util.headless.HeadlessAnalyzer.processLocal(HeadlessAnalyzer.java:452)
+	at ghidra.app.util.headless.AnalyzeHeadless.launch(AnalyzeHeadless.java:199)
+	at ghidra.GhidraLauncher.launch(GhidraLauncher.java:81)
+	at ghidra.Ghidra.main(Ghidra.java:54)
+Caused by: java.lang.ClassNotFoundException: GhidraDecompClient not found by 171e88 [1]
+	at org.apache.felix.framework.BundleWiringImpl.findClassOrResourceByDelegation(BundleWiringImpl.java:1591)
+	at org.apache.felix.framework.BundleWiringImpl.access$300(BundleWiringImpl.java:79)
+	at org.apache.felix.framework.BundleWiringImpl$BundleClassLoader.loadClass(BundleWiringImpl.java:1976)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:490)
+	at org.apache.felix.framework.Felix.loadBundleClass(Felix.java:2116)
+	at org.apache.felix.framework.BundleImpl.loadClass(BundleImpl.java:986)
+	at ghidra.app.script.JavaScriptProvider.loadClass(JavaScriptProvider.java:166)
+	at ghidra.app.script.JavaScriptProvider.getScriptInstance(JavaScriptProvider.java:97)
+	... 10 more
+ 
+INFO  ANALYZING changes made by post scripts: file:///home/dong/prlvideo-ng/prl_client_app (HeadlessAnalyzer)  
+INFO  REPORT: Post-analysis succeeded for file: file:///home/dong/prlvideo-ng/prl_client_app (HeadlessAnalyzer)  
+INFO  /prl_client_app: file created (root) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /prl_client_app (clientapp:/prl_client_app) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  

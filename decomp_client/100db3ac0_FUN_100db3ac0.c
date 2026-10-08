@@ -1,0 +1,15 @@
+
+undefined8 FUN_100db3ac0(long *param_1)
+
+{
+  char cVar1;
+  undefined8 uVar2;
+  
+  cVar1 = (**(code **)(*param_1 + 0x98))();
+  if (cVar1 != '\0') {
+    uVar2 = FUN_100db72b0((int)param_1[1]);
+    return uVar2;
+  }
+  return 0xffffffffffffffff;
+}
+

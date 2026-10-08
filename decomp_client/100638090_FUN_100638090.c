@@ -1,0 +1,8 @@
+
+void FUN_100638090(long param_1)
+
+{
+  CBaseDialog::~CBaseDialog((CBaseDialog *)(param_1 + -0x30));
+  return;
+}
+

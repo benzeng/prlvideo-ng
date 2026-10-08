@@ -1,0 +1,34 @@
+
+void FUN_10005f9b0(long param_1,long param_2)
+
+{
+  undefined8 uVar1;
+  QObject *pQVar2;
+  int *local_30;
+  QObject *local_28;
+  undefined1 local_19;
+  
+  uVar1 = FUN_100152280();
+  pQVar2 = (QObject *)FUN_100154930(uVar1,param_2 + 8,param_2);
+  if (pQVar2 == (QObject *)0x0) {
+    FUN_100df99c0("[CONTEXT_MNG]","prl_client_app",0,"ASSERT( %s ) occured in %s:%d [%s]","0 != vm",
+                  "Application/CAppContextLogic.mm",0xd1,"onVmAdded");
+  }
+  else {
+    uVar1 = *(undefined8 *)(param_1 + 0x10);
+    local_30 = (int *)QtSharedPointer::ExternalRefCountData::getAndRef(pQVar2);
+    local_28 = pQVar2;
+    FUN_10080a9d0(uVar1,&local_30);
+    if (local_30 != (int *)0x0) {
+      LOCK();
+      *local_30 = *local_30 + -1;
+      local_19 = *local_30 != 0;
+      UNLOCK();
+      if ((!(bool)local_19) && (local_30 != (int *)0x0)) {
+        operator_delete(local_30);
+      }
+    }
+  }
+  return;
+}
+

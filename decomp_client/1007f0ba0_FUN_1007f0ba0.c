@@ -1,0 +1,9 @@
+
+void FUN_1007f0ba0(void)
+
+{
+  qRegisterResourceData(1,"","","");
+  ___cxa_atexit(FUN_1007f0b70,&DAT_102312417,0x100000000);
+  return;
+}
+

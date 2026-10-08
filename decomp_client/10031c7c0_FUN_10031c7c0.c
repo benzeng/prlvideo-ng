@@ -1,0 +1,35 @@
+
+void FUN_10031c7c0(long param_1,char param_2)
+
+{
+  QArrayData *local_20;
+  undefined1 local_13;
+  undefined1 local_12;
+  
+  if (*(char *)(param_1 + 0x160) != param_2) {
+    *(char *)(param_1 + 0x160) = param_2;
+    local_20 = *(QArrayData **)(param_1 + 0x28);
+    if (1 < *(int *)local_20 + 1U) {
+      LOCK();
+      *(int *)local_20 = *(int *)local_20 + 1;
+      local_13 = *(int *)local_20 != 0;
+      UNLOCK();
+      param_2 = *(char *)(param_1 + 0x160);
+    }
+    FUN_100829fd0(param_1,&local_20,param_2 != '\0');
+    if (*(int *)local_20 != -1) {
+      if (*(int *)local_20 != 0) {
+        LOCK();
+        *(int *)local_20 = *(int *)local_20 + -1;
+        UNLOCK();
+        if (*(int *)local_20 != 0) {
+          return;
+        }
+        local_12 = 0;
+      }
+      QArrayData::deallocate(local_20,2,8);
+    }
+  }
+  return;
+}
+

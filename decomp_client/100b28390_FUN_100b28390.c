@@ -1,0 +1,31 @@
+
+void FUN_100b28390(long *param_1,long *param_2)
+
+{
+  long lVar1;
+  undefined8 *puVar2;
+  
+  FUN_100b20280(param_1,param_2 + 1);
+  lVar1 = *param_2;
+  *param_1 = lVar1;
+  *(long *)((long)param_1 + *(long *)(lVar1 + -0x18)) = param_2[3];
+  ___bzero(param_1 + 0x301f,0x200);
+  puVar2 = operator_new(0x40,(nothrow_t *)PTR_nothrow_1021e1620);
+  if (puVar2 == (undefined8 *)0x0) {
+    param_1[4] = 0;
+    FUN_100df99c0("","dimg",0,"No memory for STRUCTURED_INFO at VMDKSparseImage construction");
+  }
+  else {
+    puVar2[1] = 0x100000004;
+    *(undefined4 *)(puVar2 + 2) = 0;
+    *(undefined4 *)(puVar2 + 6) = 0;
+    puVar2[5] = 0;
+    puVar2[4] = 0;
+    puVar2[3] = 0;
+    puVar2[7] = param_1;
+    *puVar2 = &PTR_FUN_10223e8a0;
+    param_1[4] = (long)puVar2;
+  }
+  return;
+}
+

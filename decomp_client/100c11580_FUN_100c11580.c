@@ -1,0 +1,114 @@
+
+undefined8
+FUN_100c11580(undefined8 param_1,undefined8 param_2,undefined8 param_3,undefined8 param_4,
+             undefined8 param_5)
+
+{
+  undefined1 auVar1 [16];
+  undefined1 auVar2 [16];
+  undefined1 auVar3 [16];
+  undefined1 auVar4 [16];
+  undefined1 auVar5 [16];
+  undefined1 auVar6 [16];
+  uint uVar7;
+  uint in_EAX;
+  uint uVar8;
+  uint *in_RCX;
+  undefined1 (*pauVar9) [16];
+  undefined4 uVar10;
+  uint uVar11;
+  uint uVar12;
+  uint uVar13;
+  uint uVar14;
+  uint uVar15;
+  uint uVar16;
+  uint uVar17;
+  uint in_XMM2_Dc;
+  uint in_XMM2_Dd;
+  undefined1 auVar18 [16];
+  uint in_XMM3_Dc;
+  uint in_XMM3_Dd;
+  undefined1 auVar19 [16];
+  uint in_XMM4_Dc;
+  uint in_XMM4_Dd;
+  undefined1 auVar20 [16];
+  
+  uVar11 = *in_RCX;
+  uVar12 = in_RCX[1];
+  uVar13 = in_RCX[2];
+  uVar7 = in_RCX[3];
+  uVar8 = in_EAX >> 1;
+  uVar14 = in_RCX[4];
+  uVar15 = in_RCX[5];
+  uVar16 = in_RCX[6];
+  uVar17 = in_RCX[7];
+  pauVar9 = (undefined1 (*) [16])(in_RCX + 8);
+  auVar18._0_4_ = (uint)param_3 ^ uVar11;
+  auVar18._4_4_ = (uint)((ulong)param_3 >> 0x20) ^ uVar12;
+  auVar18._8_4_ = in_XMM2_Dc ^ uVar13;
+  auVar18._12_4_ = in_XMM2_Dd ^ uVar7;
+  auVar19._0_4_ = (uint)param_4 ^ uVar11;
+  auVar19._4_4_ = (uint)((ulong)param_4 >> 0x20) ^ uVar12;
+  auVar19._8_4_ = in_XMM3_Dc ^ uVar13;
+  auVar19._12_4_ = in_XMM3_Dd ^ uVar7;
+  auVar20._0_4_ = (uint)param_5 ^ uVar11;
+  auVar20._4_4_ = (uint)((ulong)param_5 >> 0x20) ^ uVar12;
+  auVar20._8_4_ = in_XMM4_Dc ^ uVar13;
+  auVar20._12_4_ = in_XMM4_Dd ^ uVar7;
+  uVar10 = *(undefined4 *)*pauVar9;
+  uVar11 = in_RCX[9];
+  uVar12 = in_RCX[10];
+  uVar13 = in_RCX[0xb];
+  do {
+    auVar1._4_4_ = uVar15;
+    auVar1._0_4_ = uVar14;
+    auVar1._8_4_ = uVar16;
+    auVar1._12_4_ = uVar17;
+    auVar18 = aesenc(auVar18,auVar1);
+    auVar5._4_4_ = uVar15;
+    auVar5._0_4_ = uVar14;
+    auVar5._8_4_ = uVar16;
+    auVar5._12_4_ = uVar17;
+    auVar19 = aesenc(auVar19,auVar5);
+    uVar8 = uVar8 - 1;
+    auVar6._4_4_ = uVar15;
+    auVar6._0_4_ = uVar14;
+    auVar6._8_4_ = uVar16;
+    auVar6._12_4_ = uVar17;
+    auVar20 = aesenc(auVar20,auVar6);
+    auVar1 = pauVar9[1];
+    uVar14 = auVar1._0_4_;
+    uVar15 = auVar1._4_4_;
+    uVar16 = auVar1._8_4_;
+    uVar17 = auVar1._12_4_;
+    auVar2._4_4_ = uVar11;
+    auVar2._0_4_ = uVar10;
+    auVar2._8_4_ = uVar12;
+    auVar2._12_4_ = uVar13;
+    auVar18 = aesenc(auVar18,auVar2);
+    auVar3._4_4_ = uVar11;
+    auVar3._0_4_ = uVar10;
+    auVar3._8_4_ = uVar12;
+    auVar3._12_4_ = uVar13;
+    auVar19 = aesenc(auVar19,auVar3);
+    pauVar9 = pauVar9 + 2;
+    auVar4._4_4_ = uVar11;
+    auVar4._0_4_ = uVar10;
+    auVar4._8_4_ = uVar12;
+    auVar4._12_4_ = uVar13;
+    auVar20 = aesenc(auVar20,auVar4);
+    auVar2 = *pauVar9;
+    uVar10 = auVar2._0_4_;
+    uVar11 = auVar2._4_4_;
+    uVar12 = auVar2._8_4_;
+    uVar13 = auVar2._12_4_;
+  } while (uVar8 != 0);
+  auVar18 = aesenc(auVar18,auVar1);
+  auVar19 = aesenc(auVar19,auVar1);
+  auVar20 = aesenc(auVar20,auVar1);
+  aesenclast(auVar18,auVar2);
+  aesenclast(auVar19,auVar2);
+  aesenclast(auVar20,auVar2);
+  return auVar2._0_8_;
+}
+

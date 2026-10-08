@@ -925,3 +925,40 @@ prl_vm_app（接收方）
    "Process sliding mouse state change"（用 log stream 实时抓）
 3. isHovered 条件：Mac 光标必须真的悬停在 VM 窗口上——实验时
    确认窗口焦点状态
+
+## 🖥️ 客户端条件链全破译（2026-10-08 23:30，37,315 函数反编译）
+
+**prl_client_app 滑动鼠标完整链路**：
+```
+宿主 console attach → 0x1895e (PET_IO_SLIDING_MOUSE_FLAG)
+  → FUN_100329bd0 case 0x1895e → Qt signal vmSlidingMouseStatusChanged
+  → onSlidingMouseStatusChanged (FUN_10035c410)
+    → setGuestSupport: vm+0xa8 = flag value
+    → updateMouseType (FUN_100361a60)
+```
+
+**updateMouseType 判定矩阵**：
+```
+绝对模式 = VTD==0 AND guest_support==1 AND MouseSync==1
+           AND NOT (USB_mouse AND SmartMouse)
+自动滑入 = cursor_empty AND !coherence AND SmartMouse AND
+           guest_support AND vm_state(7/8/9) AND maybe_drag
+```
+配置状态：MouseSync=1 ✓ SmartMouse=1 ✓ → 只要
+guest_support 到 1 且 VTD==0，相对自动切换即启用。
+
+**guest_support 的来源**：0x1895e FLAG 事件的数据（console+0x38
+bitmask）。宿主在 console attach/release 时经 FUN_100430270 发出。
+
+**关键日志**（level≥3）："Process sliding mouse state change: %s"
+（DISABLED / ENABLED (Absolute) / ENABLED (Sliding)）和 level≥4 的
+"Absolute mouse switch flags" / "Relative mouse auto switch flags"
+——下次实验前先开 prl_client_app 的 verbose（DAT_102230ffd0
+对应环境变量或 defaults 命令待查），一次观测全部布尔量。
+
+**剩余唯一悬案**：guest 侧 console attach 后 FLAG 是否真的到达
+客户端（日志零记录=未到达或 level 不够）。下次：
+1. 开 verbose 日志 → 探针激活 → 看 "Process sliding mouse state
+   change" 是否出现 + 全部 flag 值
+2. 若未到达 → 宿主侧 FUN_100430270 的发送条件（console+0x38
+   之外可能还需 +0x40 "sliding available" = cmd4/10 激活后设置）

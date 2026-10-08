@@ -1,0 +1,70 @@
+
+undefined1 FUN_100142d70(long param_1)
+
+{
+  Node *pNVar1;
+  int iVar2;
+  Node *pNVar3;
+  Node *pNVar4;
+  undefined8 *puVar5;
+  undefined1 uVar6;
+  
+  pNVar4 = *(Node **)(param_1 + 0x38);
+  if (1 < *(int *)(pNVar4 + 0x10) + 1U) {
+    LOCK();
+    *(int *)(pNVar4 + 0x10) = *(int *)(pNVar4 + 0x10) + 1;
+    UNLOCK();
+  }
+  pNVar3 = pNVar4;
+  if ((((byte)pNVar4[0x28] & 1) == 0) && (1 < *(uint *)(pNVar4 + 0x10))) {
+    pNVar3 = (Node *)QHashData::detach_helper
+                               ((_func_void_Node_ptr_void_ptr *)pNVar4,FUN_100143810,0x143800,0x18);
+    if (*(int *)(pNVar4 + 0x10) != -1) {
+      if (*(int *)(pNVar4 + 0x10) != 0) {
+        LOCK();
+        pNVar1 = pNVar4 + 0x10;
+        *(int *)pNVar1 = *(int *)pNVar1 + -1;
+        UNLOCK();
+        if (*(int *)pNVar1 != 0) goto LAB_100142dfe;
+      }
+      QHashData::free_helper((_func_void_Node_ptr *)pNVar4);
+    }
+  }
+LAB_100142dfe:
+  iVar2 = *(int *)(pNVar3 + 0x20);
+  pNVar4 = pNVar3;
+  if (iVar2 != 0) {
+    puVar5 = *(undefined8 **)(pNVar3 + 8);
+    do {
+      pNVar4 = (Node *)*puVar5;
+      if ((Node *)*puVar5 != pNVar3) break;
+      iVar2 = iVar2 + -1;
+      puVar5 = puVar5 + 1;
+      pNVar4 = pNVar3;
+    } while (iVar2 != 0);
+  }
+  do {
+    if (pNVar4 == pNVar3) {
+      uVar6 = 0;
+LAB_100142e90:
+      if (*(int *)(pNVar3 + 0x10) != -1) {
+        if (*(int *)(pNVar3 + 0x10) != 0) {
+          LOCK();
+          pNVar4 = pNVar3 + 0x10;
+          *(int *)pNVar4 = *(int *)pNVar4 + -1;
+          UNLOCK();
+          if (*(int *)pNVar4 != 0) {
+            return uVar6;
+          }
+        }
+        QHashData::free_helper((_func_void_Node_ptr *)pNVar3);
+      }
+      return uVar6;
+    }
+    if ((*(long *)(pNVar4 + 0x10) != 0) &&
+       (uVar6 = 1, (*(byte *)(*(long *)(*(long *)(pNVar4 + 0x10) + 0x28) + 8) & 2) != 0))
+    goto LAB_100142e90;
+    pNVar4 = (Node *)QHashData::nextNode(pNVar4);
+  } while( true );
+}
+

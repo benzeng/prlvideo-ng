@@ -1,0 +1,89 @@
+
+undefined8 FUN_100d8acd0(undefined8 param_1)
+
+{
+  char *pcVar1;
+  size_t sVar2;
+  int iVar3;
+  QArrayData *local_48;
+  QArrayData *local_40;
+  QArrayData *local_38;
+  QArrayData *local_30;
+  QArrayData *local_28;
+  undefined1 local_19;
+  
+  local_30 = (QArrayData *)QString::fromAscii_helper("%1/%2",5);
+  pcVar1 = (char *)FUN_100dfa1a0();
+  if (pcVar1 != (char *)0x0) {
+    _strlen(pcVar1);
+  }
+  QString::fromUtf8_helper((char *)&local_40,(int)pcVar1);
+  QString::normalized(&local_38,&local_40,1,0);
+  QString::arg(&local_28,&local_30,&local_38,0,0x20);
+  pcVar1 = (char *)FUN_100dfa560();
+  iVar3 = -1;
+  if (pcVar1 != (char *)0x0) {
+    sVar2 = _strlen(pcVar1);
+    iVar3 = (int)sVar2;
+  }
+  local_48 = (QArrayData *)QString::fromAscii_helper(pcVar1,iVar3);
+  QString::arg(param_1,&local_28,&local_48,0,0x20);
+  if (*(int *)local_48 != -1) {
+    if (*(int *)local_48 != 0) {
+      LOCK();
+      *(int *)local_48 = *(int *)local_48 + -1;
+      local_19 = *(int *)local_48 != 0;
+      UNLOCK();
+      if ((bool)local_19) goto LAB_100d8adba;
+    }
+    QArrayData::deallocate(local_48,2,8);
+  }
+LAB_100d8adba:
+  if (*(int *)local_28 != -1) {
+    if (*(int *)local_28 != 0) {
+      LOCK();
+      *(int *)local_28 = *(int *)local_28 + -1;
+      local_19 = *(int *)local_28 != 0;
+      UNLOCK();
+      if ((bool)local_19) goto LAB_100d8adea;
+    }
+    QArrayData::deallocate(local_28,2,8);
+  }
+LAB_100d8adea:
+  if (*(int *)local_38 != -1) {
+    if (*(int *)local_38 != 0) {
+      LOCK();
+      *(int *)local_38 = *(int *)local_38 + -1;
+      local_19 = *(int *)local_38 != 0;
+      UNLOCK();
+      if ((bool)local_19) goto LAB_100d8ae1a;
+    }
+    QArrayData::deallocate(local_38,2,8);
+  }
+LAB_100d8ae1a:
+  if (*(int *)local_40 != -1) {
+    if (*(int *)local_40 != 0) {
+      LOCK();
+      *(int *)local_40 = *(int *)local_40 + -1;
+      local_19 = *(int *)local_40 != 0;
+      UNLOCK();
+      if ((bool)local_19) goto LAB_100d8ae4a;
+    }
+    QArrayData::deallocate(local_40,2,8);
+  }
+LAB_100d8ae4a:
+  if (*(int *)local_30 != -1) {
+    if (*(int *)local_30 != 0) {
+      LOCK();
+      *(int *)local_30 = *(int *)local_30 + -1;
+      UNLOCK();
+      if (*(int *)local_30 != 0) {
+        return param_1;
+      }
+      local_19 = 0;
+    }
+    QArrayData::deallocate(local_30,2,8);
+  }
+  return param_1;
+}
+

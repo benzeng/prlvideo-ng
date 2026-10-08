@@ -1,0 +1,15 @@
+
+void FUN_100c611d0(void)
+
+{
+  _OPENSSL_cleanse(&DAT_1023163c0,0x413);
+  DAT_10231638c = 0;
+  DAT_102316388 = 0;
+  _OPENSSL_cleanse(&DAT_1023163a0,0x14);
+  DAT_102316390 = 0;
+  DAT_102316398 = 0;
+  DAT_102316380 = 0;
+  DAT_102316379 = 0;
+  return;
+}
+

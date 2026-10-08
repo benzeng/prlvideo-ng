@@ -1,0 +1,9 @@
+
+void FUN_10085a510(long param_1)
+
+{
+  FUN_100381040((void *)(param_1 + -0x10));
+  operator_delete((void *)(param_1 + -0x10));
+  return;
+}
+

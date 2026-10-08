@@ -1,0 +1,13 @@
+
+void FUN_100a683c0(QIODevice *param_1)
+
+{
+  QIODevice::QIODevice(param_1);
+  *(undefined ***)param_1 = &PTR_metaObject_1022392b0;
+  *(undefined8 *)(param_1 + 0x28) = 0;
+  *(undefined8 *)(param_1 + 0x20) = 0;
+  *(undefined8 *)(param_1 + 0x18) = 0;
+  *(undefined8 *)(param_1 + 0x10) = 0;
+  return;
+}
+

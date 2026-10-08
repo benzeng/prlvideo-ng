@@ -1,0 +1,23 @@
+
+void FUN_100853a40(undefined8 *param_1)
+
+{
+  int *piVar1;
+  
+  param_1[-2] = &PTR_FUN_102226fa8;
+  *param_1 = &PTR_FUN_102227198;
+  param_1[4] = &PTR_FUN_1022271e8;
+  piVar1 = (int *)param_1[0xb];
+  if (piVar1 != (int *)0x0) {
+    LOCK();
+    *piVar1 = *piVar1 + -1;
+    UNLOCK();
+    if ((*piVar1 == 0) && ((void *)param_1[0xb] != (void *)0x0)) {
+      operator_delete((void *)param_1[0xb]);
+    }
+  }
+  CBaseDialog::~CBaseDialog((CBaseDialog *)(param_1 + -2));
+  operator_delete((CBaseDialog *)(param_1 + -2));
+  return;
+}
+

@@ -1,0 +1,18 @@
+
+undefined8 * FUN_1005fc510(undefined8 *param_1,long param_2)
+
+{
+  int *piVar1;
+  long lVar2;
+  
+  lVar2 = FUN_1005ec990(param_2 + 0x38);
+  piVar1 = *(int **)(lVar2 + 0x98);
+  *param_1 = piVar1;
+  if (1 < *piVar1 + 1U) {
+    LOCK();
+    *piVar1 = *piVar1 + 1;
+    UNLOCK();
+  }
+  return param_1;
+}
+

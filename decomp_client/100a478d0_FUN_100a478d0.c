@@ -1,0 +1,8 @@
+
+void FUN_100a478d0(undefined8 param_1,undefined8 param_2)
+
+{
+  FUN_100a47680(0,param_1,param_2);
+  return;
+}
+

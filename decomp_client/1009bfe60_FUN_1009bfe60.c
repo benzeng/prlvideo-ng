@@ -1,0 +1,17 @@
+
+void FUN_1009bfe60(undefined8 param_1,int param_2,int param_3,long param_4)
+
+{
+  if (param_2 == 0) {
+    if (param_3 == 1) {
+      FUN_10099c0f0();
+      return;
+    }
+    if (param_3 == 0) {
+      FUN_10099b750(param_1,**(undefined1 **)(param_4 + 8));
+      return;
+    }
+  }
+  return;
+}
+

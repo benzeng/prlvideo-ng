@@ -1,0 +1,178 @@
+
+void FUN_100c2fc20(undefined8 *param_1,ulong *param_2)
+
+{
+  undefined1 auVar1 [16];
+  undefined1 auVar2 [16];
+  undefined1 auVar3 [16];
+  undefined1 auVar4 [16];
+  undefined1 auVar5 [16];
+  undefined1 auVar6 [16];
+  undefined1 auVar7 [16];
+  undefined1 auVar8 [16];
+  undefined1 auVar9 [16];
+  undefined1 auVar10 [16];
+  undefined1 auVar11 [16];
+  undefined1 auVar12 [16];
+  undefined1 auVar13 [16];
+  undefined1 auVar14 [16];
+  undefined1 auVar15 [16];
+  undefined1 auVar16 [16];
+  undefined1 auVar17 [16];
+  undefined1 auVar18 [16];
+  undefined1 auVar19 [16];
+  undefined1 auVar20 [16];
+  undefined1 auVar21 [16];
+  undefined1 auVar22 [16];
+  undefined1 auVar23 [16];
+  undefined1 auVar24 [16];
+  undefined1 auVar25 [16];
+  ulong uVar26;
+  ulong uVar27;
+  ulong uVar28;
+  ulong uVar29;
+  ulong uVar30;
+  ulong uVar31;
+  ulong uVar32;
+  ulong uVar33;
+  ulong uVar34;
+  ulong uVar35;
+  ulong uVar36;
+  ulong uVar37;
+  ulong uVar38;
+  ulong uVar39;
+  ulong uVar40;
+  ulong uVar41;
+  
+  auVar1._8_8_ = 0;
+  auVar1._0_8_ = *param_2;
+  auVar11._8_8_ = 0;
+  auVar11._0_8_ = *param_2;
+  auVar1 = auVar1 * auVar11 + ZEXT816(0);
+  uVar28 = auVar1._8_8_;
+  *param_1 = auVar1._0_8_;
+  auVar2._8_8_ = 0;
+  auVar2._0_8_ = param_2[1];
+  auVar12._8_8_ = 0;
+  auVar12._0_8_ = *param_2;
+  auVar2 = auVar2 * auVar12;
+  uVar29 = auVar2._8_8_;
+  auVar24._8_8_ = uVar29;
+  auVar24._0_8_ = uVar28;
+  uVar26 = auVar2._0_8_;
+  auVar25._8_8_ = 0;
+  auVar25._0_8_ = uVar26;
+  auVar2 = auVar2 + auVar24;
+  uVar28 = (ulong)CARRY8(uVar28,uVar26);
+  auVar21._8_8_ = 0;
+  auVar21._0_8_ = SUB168(auVar2 + auVar25,8);
+  uVar35 = (ulong)CARRY8(uVar29,uVar28) +
+           (ulong)(CARRY8(uVar29 + uVar28,uVar29) ||
+                  CARRY8(auVar2._8_8_,(ulong)CARRY8(auVar2._0_8_,uVar26)));
+  param_1[1] = SUB168(auVar2 + auVar25,0);
+  auVar3._8_8_ = 0;
+  auVar3._0_8_ = param_2[1];
+  auVar13._8_8_ = 0;
+  auVar13._0_8_ = param_2[1];
+  auVar21 = auVar3 * auVar13 + auVar21;
+  uVar28 = auVar21._0_8_;
+  uVar30 = auVar21._8_8_;
+  uVar36 = uVar35 + uVar30;
+  auVar4._8_8_ = 0;
+  auVar4._0_8_ = param_2[2];
+  auVar14._8_8_ = 0;
+  auVar14._0_8_ = *param_2;
+  uVar31 = SUB168(auVar4 * auVar14,8);
+  uVar27 = SUB168(auVar4 * auVar14,0);
+  uVar41 = uVar28 + uVar27;
+  uVar28 = (ulong)CARRY8(uVar28,uVar27);
+  uVar29 = uVar36 + uVar31;
+  uVar37 = uVar29 + uVar28;
+  uVar26 = (ulong)CARRY8(uVar41,uVar27);
+  uVar39 = uVar37 + uVar31;
+  uVar38 = uVar39 + uVar26;
+  uVar32 = (ulong)CARRY8(uVar35,uVar30) + (ulong)(CARRY8(uVar36,uVar31) || CARRY8(uVar29,uVar28)) +
+           (ulong)(CARRY8(uVar37,uVar31) || CARRY8(uVar39,uVar26));
+  param_1[2] = uVar41 + uVar27;
+  auVar5._8_8_ = 0;
+  auVar5._0_8_ = param_2[3];
+  auVar15._8_8_ = 0;
+  auVar15._0_8_ = *param_2;
+  uVar37 = SUB168(auVar5 * auVar15,8);
+  uVar26 = SUB168(auVar5 * auVar15,0);
+  uVar29 = uVar38 + uVar26;
+  uVar28 = (ulong)CARRY8(uVar38,uVar26);
+  uVar27 = uVar32 + uVar37;
+  uVar41 = uVar27 + uVar28;
+  uVar39 = uVar29 + uVar26;
+  uVar26 = (ulong)CARRY8(uVar29,uVar26);
+  uVar30 = uVar41 + uVar37;
+  uVar33 = uVar30 + uVar26;
+  auVar6._8_8_ = 0;
+  auVar6._0_8_ = param_2[2];
+  auVar16._8_8_ = 0;
+  auVar16._0_8_ = param_2[1];
+  uVar38 = SUB168(auVar6 * auVar16,8);
+  uVar36 = SUB168(auVar6 * auVar16,0);
+  uVar40 = uVar39 + uVar36;
+  uVar29 = (ulong)CARRY8(uVar39,uVar36);
+  uVar31 = uVar33 + uVar38;
+  uVar34 = uVar31 + uVar29;
+  uVar39 = (ulong)CARRY8(uVar40,uVar36);
+  uVar35 = uVar34 + uVar38;
+  auVar22._8_8_ = 0;
+  auVar22._0_8_ = uVar35 + uVar39;
+  uVar30 = (ulong)(CARRY8(uVar32,uVar37) || CARRY8(uVar27,uVar28)) +
+           (ulong)(CARRY8(uVar41,uVar37) || CARRY8(uVar30,uVar26)) +
+           (ulong)(CARRY8(uVar33,uVar38) || CARRY8(uVar31,uVar29)) +
+           (ulong)(CARRY8(uVar34,uVar38) || CARRY8(uVar35,uVar39));
+  param_1[3] = uVar40 + uVar36;
+  auVar7._8_8_ = 0;
+  auVar7._0_8_ = param_2[2];
+  auVar17._8_8_ = 0;
+  auVar17._0_8_ = param_2[2];
+  auVar22 = auVar7 * auVar17 + auVar22;
+  uVar28 = auVar22._0_8_;
+  uVar37 = auVar22._8_8_;
+  uVar31 = uVar30 + uVar37;
+  auVar8._8_8_ = 0;
+  auVar8._0_8_ = param_2[3];
+  auVar18._8_8_ = 0;
+  auVar18._0_8_ = param_2[1];
+  uVar38 = SUB168(auVar8 * auVar18,8);
+  uVar27 = SUB168(auVar8 * auVar18,0);
+  uVar32 = uVar28 + uVar27;
+  uVar28 = (ulong)CARRY8(uVar28,uVar27);
+  uVar29 = uVar31 + uVar38;
+  uVar35 = uVar29 + uVar28;
+  uVar26 = (ulong)CARRY8(uVar32,uVar27);
+  uVar39 = uVar35 + uVar38;
+  uVar36 = uVar39 + uVar26;
+  uVar35 = (ulong)CARRY8(uVar30,uVar37) + (ulong)(CARRY8(uVar31,uVar38) || CARRY8(uVar29,uVar28)) +
+           (ulong)(CARRY8(uVar35,uVar38) || CARRY8(uVar39,uVar26));
+  param_1[4] = uVar32 + uVar27;
+  auVar9._8_8_ = 0;
+  auVar9._0_8_ = param_2[3];
+  auVar19._8_8_ = 0;
+  auVar19._0_8_ = param_2[2];
+  uVar31 = SUB168(auVar9 * auVar19,8);
+  uVar27 = SUB168(auVar9 * auVar19,0);
+  uVar30 = uVar36 + uVar27;
+  uVar28 = (ulong)CARRY8(uVar36,uVar27);
+  uVar29 = uVar35 + uVar31;
+  uVar36 = uVar29 + uVar28;
+  uVar26 = (ulong)CARRY8(uVar30,uVar27);
+  uVar39 = uVar36 + uVar31;
+  auVar23._8_8_ =
+       (ulong)(CARRY8(uVar35,uVar31) || CARRY8(uVar29,uVar28)) +
+       (ulong)(CARRY8(uVar36,uVar31) || CARRY8(uVar39,uVar26));
+  auVar23._0_8_ = uVar39 + uVar26;
+  param_1[5] = uVar30 + uVar27;
+  auVar10._8_8_ = 0;
+  auVar10._0_8_ = param_2[3];
+  auVar20._8_8_ = 0;
+  auVar20._0_8_ = param_2[3];
+  *(undefined1 (*) [16])(param_1 + 6) = auVar10 * auVar20 + auVar23;
+  return;
+}
+

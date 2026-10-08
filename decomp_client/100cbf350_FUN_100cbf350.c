@@ -1,0 +1,19 @@
+
+bool FUN_100cbf350(long param_1,long param_2)
+
+{
+  int iVar1;
+  long lVar2;
+  bool bVar3;
+  
+  lVar2 = FUN_100cbea40();
+  *(long *)(param_1 + 0x28) = lVar2;
+  bVar3 = false;
+  if (lVar2 != 0) {
+    *(undefined4 *)(param_1 + 0x48) = 0;
+    iVar1 = FUN_100cbeb90(lVar2,*(undefined8 *)(param_2 + 0x28));
+    bVar3 = iVar1 != 0;
+  }
+  return bVar3;
+}
+

@@ -1,0 +1,22 @@
+
+long FUN_100c8fe80(undefined8 param_1,long *param_2)
+
+{
+  long lVar1;
+  long lVar2;
+  long lVar3;
+  
+  lVar1 = FUN_100c91810(param_1,0);
+  lVar3 = 0;
+  if (lVar1 != 0) {
+    lVar2 = FUN_100c6d5d0(lVar1);
+    FUN_100c6d8c0(lVar1);
+    lVar3 = 0;
+    if ((lVar2 != 0) && (lVar3 = lVar2, param_2 != (long *)0x0)) {
+      FUN_100c47630(*param_2);
+      *param_2 = lVar2;
+    }
+  }
+  return lVar3;
+}
+

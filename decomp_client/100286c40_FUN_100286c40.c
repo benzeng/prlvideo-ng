@@ -1,0 +1,42 @@
+
+void FUN_100286c40(long param_1)
+
+{
+  int *piVar1;
+  int *local_28;
+  int *local_20;
+  undefined1 local_11;
+  
+  (**(code **)(param_1 + 0x28))(&local_28,param_1 + 0x30,param_1 + 0x1f8);
+  if (*(int **)(param_1 + 0x20) != local_28) {
+    FUN_100287280(&local_20,&local_28);
+    piVar1 = *(int **)(param_1 + 0x20);
+    *(int **)(param_1 + 0x20) = local_20;
+    local_20 = piVar1;
+    if (*piVar1 != -1) {
+      if (*piVar1 != 0) {
+        LOCK();
+        *piVar1 = *piVar1 + -1;
+        local_11 = *piVar1 != 0;
+        UNLOCK();
+        if ((bool)local_11) goto LAB_100286cab;
+      }
+      FUN_100286360(&local_20,piVar1);
+    }
+  }
+LAB_100286cab:
+  if (*local_28 != -1) {
+    if (*local_28 != 0) {
+      LOCK();
+      *local_28 = *local_28 + -1;
+      UNLOCK();
+      local_20 = (int *)CONCAT71(local_20._1_7_,*local_28 != 0);
+      if (*local_28 != 0) {
+        return;
+      }
+    }
+    FUN_100286360(&local_28,local_28);
+  }
+  return;
+}
+

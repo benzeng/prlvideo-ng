@@ -1,0 +1,8 @@
+
+void FUN_1009649ba(undefined8 param_1,undefined8 param_2)
+
+{
+  _xmlSchemaFreeValue(param_2);
+  return;
+}
+

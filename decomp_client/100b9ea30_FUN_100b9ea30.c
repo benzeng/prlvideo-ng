@@ -1,0 +1,22 @@
+
+int FUN_100b9ea30(undefined4 *param_1,char *param_2,int param_3)
+
+{
+  int iVar1;
+  ulong uVar2;
+  char *local_30;
+  
+  iVar1 = _strncasecmp(param_2,"unlimited",(long)param_3);
+  if (iVar1 == 0) {
+    *param_1 = 0xffff;
+  }
+  else {
+    uVar2 = _strtoul(param_2,&local_30,10);
+    *param_1 = (int)uVar2;
+    if (param_2 + param_3 != local_30) {
+      param_3 = -2;
+    }
+  }
+  return param_3;
+}
+
