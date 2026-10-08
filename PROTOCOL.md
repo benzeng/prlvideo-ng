@@ -803,3 +803,21 @@ prl_share_state_enabled，prlmouse weak-import），默认关=纯净。
 - 批获取实现（44B 绝对事件记录 + 按钮位图）
 - 输入死活因果链全闭环（唯一残门：宿主 console ACTIVE）
 - 联动开关 + 残留清除工具 = 实验条件从此可控
+
+## ⚠️ 宿主侧调试危险操作规程（2026-10-08 晚，lldb 事故）
+
+**事故**：lldb 附 prl_vm_app → mach 挂起目标 → VM 全部虚拟硬件冻结。
+命令链被中断后 lldb 停在交互态（100% CPU 空转），VM 持续挂起。
+
+**恢复路径（实测）**：杀 lldb **不够**——prl_vm_app 留在损坏的
+异常状态（mach 端口/信号残留），必须**完全退出 PD 应用 → 重启
+PD → 启动 VM** 才恢复。杀 lldb ≠ 干净 detach。
+
+**规程**（下次宿主侧调试必须遵守）：
+1. 单条 SSH 内完成 attach→读→quit，不留交互态
+2. 外层 timeout 护栏；超时杀 lldb 后**仍需准备 PD 重启**
+3. 先 image lookup 拿确认地址反推 slide，再读数据（上次直读
+   失败=slide 算错，__DATA 段与 __TEXT 滑移不同需分别验证）
+4. 最安全的替代：完全避开 attach——用 vmmap 定位 + /proc 式
+   只读（macOS 无 /proc，可用 task_for_pid + mach_vm_read 的
+   自写工具，或干脆在 VM 内从 guest 侧推）
