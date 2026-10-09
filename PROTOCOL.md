@@ -1038,3 +1038,24 @@ call FUN_100430270   ; esi = bitmask(bit0=1) ← 值正确！
 跟踪（dtrace 或 Authorized IDA 调试 prl_client_app）才能定位。
 
 **GRUB 已恢复图形模式。系统稳定。**
+
+## ⚠️ 宿主侧危险操作清单 v2（2026-10-09 补充）
+
+| 操作 | 后果 | 恢复 |
+|---|---|---|
+| lldb attach prl_vm_app | VM 挂起，中断后 lldb 空转 100% CPU | 杀 lldb + **PD 完全退出重开** |
+| killall prl_client_app | PD 整体崩溃 | PD 重启 + VM 自动恢复 |
+| killall prl_vm_app | 可能更严重（VM 核心进程） | 未知，勿试 |
+
+**规则**：宿主侧只做 SSH 远程读取（strings/vmmap/log show）。
+任何 kill/attach/debugger 操作必须先获得用户确认。
+
+**updateMouseType 完整逻辑（客户端反编译定案）**：
+- SmartMouse = PS/2 相对 + 自动捕获/释放（不是绝对模式）
+- guest_support(vm+0xa8) ← FLAG(0x1895e) ← console attach
+- FLAG 投递 = sendPackage 空名广播（已确认发出）
+- 客户端日志系统（FUN_100df99c0）不走 unified log，输出位置
+  未知——三个 defaults 域均无标准 verbose 开关
+- 下次方案：在 Mac 上用已授权的 IDA 静态分析客户端的事件
+  接收链（FUN_100329bd0→FUN_10082c2d0→Qt signal），定位
+  FLAG 被丢弃的确切位置
