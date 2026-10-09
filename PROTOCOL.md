@@ -1002,3 +1002,39 @@ sliding_available 保持 0 → FLAG 会发出 → 客户端进入
 → console mode 变 1（简单模式，不需要 cell）→ 鼠标事件经
 CPs2Mouse::real_move 以绝对坐标注入 PS/2 → **不需要批获取**！
 （原版驱动的 {1,0,2} 轮询就是在 PS/2 流上取绝对位置）
+
+## 🔬 文本模式验证 + FLAG 值汇编制确认（2026-10-09 晚）
+
+**实验**：GRUB 全切文本模式（GRUB_TERMINAL=console +
+GFXPAYLOAD=text）→ VM 重启 → 确认无 fb0（真文本模式）→
+三件套探针。**仍 0 事件**。
+
+**汇编制反汇编定案**（attach 路径 @0x1000d7b9a-0x1000d7bb3）：
+```asm
+mov esi,[rax+0x38]  ; bitmask
+or  esi,0x1          ; bit0=1 (attach)
+mov [rax+0x38],esi   ; store
+cmp BYTE[rax+0x40],0 ; sliding_available==0?
+jne skip             ; skip if available
+call FUN_100430270   ; esi = bitmask(bit0=1) ← 值正确！
+```
+**FLAG 值和条件链都正确**——问题在更深层：FUN_100434990（IO
+事件投递）或客户端的事件订阅机制。
+
+**排除矩阵总结**（四天全部实验）：
+| 假设 | 实验 | 结果 |
+|---|---|---|
+| guest 缺某命令 | cmd1+4+7+9 全发 | 全 rc=0，仍 0 事件 |
+| prlcc 缺位 | prlcc 手动运行 | 仍 0 事件 |
+| sm_ver 偏移读错 | 修正到 +0x14 | sm_ver=1 正确 |
+| TIS 版本太低 | ver=12.2.1 | 仍 0 事件 |
+| VtdSync 阻挡 | .pys Enabled=0 + 重启 | 仍 0 事件 |
+| sliding_available=1 | GRUB 文本模式重启 | 仍 0 事件 |
+| FLAG 值错误 | 汇编反汇编 | 值正确 |
+| Mac 光标行为 | 用户观察 | 保持捕获=客户端不响应 |
+
+**结论**：FLAG 在宿主的 IO 事件投递层消失（FUN_100434990 的
+路由/订阅机制），或在客户端接收层被丢弃。这需要 Mac 侧的动态
+跟踪（dtrace 或 Authorized IDA 调试 prl_client_app）才能定位。
+
+**GRUB 已恢复图形模式。系统稳定。**
