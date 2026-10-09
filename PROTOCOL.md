@@ -1059,3 +1059,18 @@ call FUN_100430270   ; esi = bitmask(bit0=1) ← 值正确！
 - 下次方案：在 Mac 上用已授权的 IDA 静态分析客户端的事件
   接收链（FUN_100329bd0→FUN_10082c2d0→Qt signal），定位
   FLAG 被丢弃的确切位置
+
+## 📋 四天战役全景总结（2026-10-09 21:40 整理）
+
+**成果**：内核4模块+显示+输入+X扩展+文件共享+网络 = 完整自研栈。
+显示管线（脏区推送）已验证（红屏）。穿越差最后一公里。
+
+**因果链完整**：console attach → FLAG 广播（确认发出）→ [客户端
+接收链上的某处丢失] → guest_support 不置位 → SmartMouse 不激活。
+
+**下次行动（Mac IDA 静态分析 prl_client_app）**：
+1. FUN_100329bd0 case 0x1895e → 确认事件处理
+2. FUN_10082c2d0 QObject 参数 → 信号目标
+3. FUN_10035ac20 setupSignals → 信号连接时机
+4. FUN_100361a60 param_1+0x10 → mouse_type 初始值
+Ghidra 反编译（decomp_client/）已有全部代码做参照。
