@@ -65,6 +65,11 @@ typedef struct {
  */
 typedef struct {
     int vtg_fd;           /* /proc/driver/prl_vtg (protocol channel) */
+    int share_fd[2];      /* rotating fds for the share loop: a write
+                           * blocks until ANOTHER fd's write arrives, so
+                           * the thread alternates (the original opened
+                           * a fresh fd every iteration — same trick) */
+    int share_idx;
     int vtg_mmap_fd;      /* same device for VRAM mmap */
     unsigned char *vram;  /* mapped VRAM base (256MB) */
     size_t vram_len;
@@ -937,6 +942,39 @@ prl_kick_thread(void *arg)
     return NULL;
 }
 
+/* visible console cursor — see prlmouse's cmd-4 arrow note */
+static void
+prl_make_arrow(unsigned char *data, unsigned stride)
+{
+    int m[64][64];
+    unsigned x, y;
+
+    (void)memset(m, 0, sizeof(m));
+    for (y = 1; y <= 12; y++)
+        for (x = 1; x <= y + 1; x++)
+            m[y][x] = 1;
+    for (y = 1; y <= 22; y++)
+        for (x = 1; x <= 6; x++)
+            m[y][x] = 1;
+    for (y = 12; y <= 22; y++)
+        for (x = 6; x <= 6 + (y - 12) && x < 63; x++)
+            m[y][x] = 1;
+
+    (void)memset(data, 0, stride * 64 * 4);
+    for (y = 0; y < 64; y++)
+        for (x = 0; x < 64 && x < stride; x++) {
+            int edge;
+
+            if (!m[y][x])
+                continue;
+            edge = x == 0 || y == 0 || x == 63 || y == 63 ||
+                   !m[y][x - 1] || !m[y][x + 1] ||
+                   !m[y - 1][x] || !m[y + 1][x];
+            ((unsigned *)data)[y * stride + x] =
+                edge ? 0xff000000u : 0xffffffffu;
+        }
+}
+
 static void *
 prl_share_thread(void *arg)
 {
@@ -971,6 +1009,10 @@ prl_share_thread(void *arg)
     {
         static unsigned char plane[6 + 64 * 64 * 4];
 
+        /* transparent placeholder — the real cursor image flows through
+         * the LoadCursorARGB plane below; shipping a bitmap here only
+         * ever produced a garbled or doubled pointer on the client */
+        memset(plane, 0, sizeof(plane));
         plane[0] = 0x20; plane[1] = 64 << 2; plane[2] = 64; plane[3] = 64;
         pthread_mutex_lock(&pPrl->lock);
         pPrl->mouse_x = prl_shared_mouse_x;
@@ -981,13 +1023,17 @@ prl_share_thread(void *arg)
     }
 
     RegionInit(&dirty, (BoxPtr)NULL, 0);
+    {
+        unsigned last_mx = ~0u, last_my = ~0u;
+        int idle_beats = 0;
+
     while (pPrl->thread_run) {
-    /* alternate fds: a write on the other fd completes this fd's
-     * pending request (the toolgate completes on NEW arrivals;
-     * same-fd writes serialize instead). Two threads, one fd each:
-     * every arrival completes the OTHER fd's pending write. */
-    if (pPrl->kick_started)
-        pthread_kill(pPrl->kick_thread, 0);
+        /* the kicker's 60Hz arrivals complete the share writes (a
+         * toolgate write returns only when another request arrives);
+         * without it the first share blocks forever -> black screen.
+         * The console-wedge suspect was the frame PUMP, since removed */
+        if (pPrl->kick_started)
+            pthread_kill(pPrl->kick_thread, 0);
         pthread_mutex_lock(&pPrl->lock);
         if (pPrl->dirty_pending) {
             RegionUnion(&dirty, &dirty, &pPrl->pending_dirty);
@@ -1003,21 +1049,29 @@ prl_share_thread(void *arg)
         }
         pthread_mutex_unlock(&pPrl->lock);
 
-        /* The host consumer is a lazy queue: a share only completes when
-         * some activity (new request, view switch) kicks it.  The
-         * original driver ran this loop with no sleep at all — the
-         * blocking write itself paces it and keeps the queue hot.  Send
-         * on every pass: dirty extents when we have them, otherwise a
-         * full-frame reannounce (also fixes the 0x10000-overflow bounds
-         * the old heartbeat sent). */
+        /* Send only when something changed: dirty extents drive the
+         * host re-fetch; a mouse-only move sends a 1x1 bound (the host
+         * reads cursor coords from buffer 1 regardless).  Idle passes
+         * sleep — the 60Hz kicker keeps the queue drained. */
         if (!RegionNil(&dirty)) {
             box = *RegionExtents(&dirty);
             RegionEmpty(&dirty);
+        } else if (mx != last_mx || my != last_my) {
+            box.x1 = box.y1 = 0;
+            box.x2 = box.y2 = 1;
+        } else if (mbx == 0 && ++idle_beats < 1000) {
+            usleep(1000);
+            continue;
         } else {
+            /* 1s full-frame heartbeat — the host needs at least one
+             * full announce to start fetching (sentinel-idle left it
+             * pitch black) */
+            idle_beats = 0;
             box.x1 = box.y1 = 0;
             box.x2 = pPrl->frame_w - 1;
             box.y2 = pPrl->frame_h - 1;
         }
+        last_mx = mx; last_my = my;
         prl_send_share_state(pPrl, box.x1, box.y1,
                              box.x2 + 1, box.y2 + 1,
                              mx + hsx, my + hsy);
@@ -1028,8 +1082,12 @@ prl_share_thread(void *arg)
             prl_send_cursor_hide(pPrl);
         mbx = 0;
 
-        usleep(1000);    /* pacing floor; the write blocks far longer
-                            whenever the consumer runs cold */
+        usleep(16000);   /* pace at ~60Hz: a hot consumer completes
+                            writes instantly and a 1ms floor flooded the
+                            host with full-frame shares under the
+                            compositor (all-screen damage at 60fps),
+                            starving the console to death */
+    }
     }
     RegionUninit(&dirty);
     return NULL;
@@ -1060,6 +1118,11 @@ prl_use_hw_cursor(ScreenPtr pScreen, CursorPtr pCurs)
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     PrlPtr pPrl = pScrn->driverPrivate;
 
+    /* ORIGINAL architecture: the host composites the cursor plane at
+     * display refresh (image via 0x8100, position via 0x8117 mouse
+     * coords) — zero framebuffer round trip.  A framebuffer sprite
+     * instead rode the damage->share->host-fetch chain, which batches
+     * under load: the jumpy cursor. */
     return pPrl->cursor_ok &&
         pCurs->bits->width <= 64 && pCurs->bits->height <= 64;
 }
@@ -1075,15 +1138,32 @@ prl_load_cursor_argb(ScrnInfoPtr pScrn, CursorPtr pCurs)
 {
     PrlPtr pPrl = pScrn->driverPrivate;
     unsigned w = pCurs->bits->width, h = pCurs->bits->height;
+    static int n;
 
+    if (n++ < 8)
+        xf86Msg(X_INFO, PRL_NAME ": load_argb#%d %ux%u ok=%d\n", n, w, h,
+                (int)pPrl->cursor_ok);
     pthread_mutex_lock(&pPrl->lock);
-    pPrl->cursor_plane[0] = 0x20;
-    pPrl->cursor_plane[1] = w << 2;
-    pPrl->cursor_plane[2] = w;
-    pPrl->cursor_plane[3] = h;
-    pPrl->cursor_plane[4] = pCurs->bits->xhot;
-    pPrl->cursor_plane[5] = pCurs->bits->yhot;
-    memcpy(pPrl->cursor_plane + 6, pCurs->bits->argb, w * h * 4);
+    /* always emit a 32x32 canvas (64x64 for oversized cursors): a
+     * packed 24x24 plane rendered as two sheared arrows — the consumer
+     * misreads non-32 strides.  Image lands at (0,0); hotspot stays
+     * relative to the origin so it is unchanged. */
+    {
+        unsigned cw = (w <= 32 && h <= 32) ? 32 : 64;
+        unsigned x, y;
+        unsigned *dst = (unsigned *)(pPrl->cursor_plane + 6);
+
+        pPrl->cursor_plane[0] = 0x20;
+        pPrl->cursor_plane[1] = cw << 2;
+        pPrl->cursor_plane[2] = cw;
+        pPrl->cursor_plane[3] = cw;
+        pPrl->cursor_plane[4] = pCurs->bits->xhot;
+        pPrl->cursor_plane[5] = pCurs->bits->yhot;
+        memset(dst, 0, cw * cw * 4);
+        for (y = 0; y < h && y < cw; y++)
+            for (x = 0; x < w && x < cw; x++)
+                dst[y * cw + x] = pCurs->bits->argb[y * w + x];
+    }
     pthread_mutex_unlock(&pPrl->lock);
 }
 
@@ -1097,21 +1177,24 @@ prl_load_cursor_image(ScrnInfoPtr pScrn, unsigned char *bits)
     int x, y;
 
     pthread_mutex_lock(&pPrl->lock);
-    pPrl->cursor_plane[0] = 1;
-    pPrl->cursor_plane[1] = 64 << 2;
-    pPrl->cursor_plane[2] = 64;
-    pPrl->cursor_plane[3] = 64;
+    /* ARGB type, 32x32 canvas — a type-1 plane carrying ARGB data (the
+     * old shape here) rendered as a sheared double arrow */
+    pPrl->cursor_plane[0] = 0x20;
+    pPrl->cursor_plane[1] = 32 << 2;
+    pPrl->cursor_plane[2] = 32;
+    pPrl->cursor_plane[3] = 32;
     pPrl->cursor_plane[4] = 0;   /* hotspot kept from last ARGB load */
     pPrl->cursor_plane[5] = 0;
     px = (unsigned *)(pPrl->cursor_plane + 6);
-    for (y = 0; y < 64; y++) {
-        for (x = 0; x < 64; x++) {
+    memset(px, 0, 32 * 32 * 4);
+    for (y = 0; y < 32; y++) {
+        for (x = 0; x < 32; x++) {
             unsigned src = (bits[y * 8 + (x >> 3)] >> (x & 7)) & 1;
             unsigned msk =
                 (bits[512 + y * 8 + (x >> 3)] >> (x & 7)) & 1;
-            *px++ = (src && msk) ? 0xffffffff :    /* fg */
-                    (msk) ? 0xff000000 :           /* bg */
-                    0x00000000;                    /* transparent */
+            px[y * 32 + x] = (src && msk) ? 0xffffffff : /* fg */
+                             (msk) ? 0xff000000 :        /* bg */
+                             0x00000000;                 /* transparent */
         }
     }
     pthread_mutex_unlock(&pPrl->lock);
@@ -1121,7 +1204,10 @@ static void
 prl_show_cursor(ScrnInfoPtr pScrn)
 {
     PrlPtr pPrl = pScrn->driverPrivate;
+    static int n;
 
+    if (n++ < 8)
+        xf86Msg(X_INFO, PRL_NAME ": show#%d\n", n);
     pthread_mutex_lock(&pPrl->lock);
     pPrl->mbx_cmd = 1;
     pthread_mutex_unlock(&pPrl->lock);
@@ -1458,9 +1544,7 @@ PrlScreenInit(ScreenPtr pScreen, int argc, char **argv)
                 pPrl->thread_started = TRUE;
                 xf86Msg(X_INFO, PRL_NAME ": sender thread started "
                         "(ShareState enabled)\n");
-                /* the kicker needs its OWN fd — same-fd writes serialize */
                 pPrl->kick_fd = open(PRL_VTG_PATH, O_WRONLY);
-                xf86Msg(X_INFO, PRL_NAME ": kick_fd=%d\n", pPrl->kick_fd);
                 if (pPrl->kick_fd >= 0 &&
                     pthread_create(&pPrl->kick_thread, NULL,
                                    prl_kick_thread, pPrl) == 0) {

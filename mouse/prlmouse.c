@@ -23,6 +23,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #include <linux/input.h>
 #include "otg.h"
 #include "mipointer.h"
@@ -48,6 +49,23 @@ typedef struct {
     int logged;
     int fetch_logged;
     int evdev_active;
+    /* hybrid positioning: PS/2 deltas at full rate, anchored to the
+     * cmd-2 poll (client feeds it at only ~10Hz -> jumpy alone) */
+    int anchor_x, anchor_y;      /* last polled absolute position */
+    int acc_dx, acc_dy;          /* deltas since the anchor */
+    CARD32 last_poll_change;     /* ms of last poll position change */
+    int poll_live;               /* poll moved within 150ms */
+    CARD32 last_delta_ms;        /* ms of last PS/2 motion delta */
+    CARD32 last_bounce_ms;       /* ms of last session bounce */
+    int bounce_count;            /* total auto-bounces this session */
+    /* poll worker thread: ALL otg traffic lives here — a cold host
+     * consumer blocks toolgate writes indefinitely, and any otg call
+     * on the X main thread freezes the whole server (logout hang) */
+    pthread_t poll_thread;
+    int thread_run;
+    pthread_mutex_t state_lock;  /* guards dims/anchor/live fields */
+    char note[160];              /* thread -> main log messages */
+    volatile int note_pending;
     volatile unsigned cell[2] __attribute__((aligned(8)));  /* host-written mouse cell */
     unsigned code, z;
     unsigned scr_w, scr_h;
@@ -92,7 +110,9 @@ prlm_tis_register(PrlMousePriv p)
     toolinfo[0] = 0xc; toolinfo[1] = 2; toolinfo[2] = 0xa28f;
     ((unsigned char *)toolinfo)[0xc] = 1;
     ((unsigned char *)toolinfo)[0xf] = 0x80;
-    toolinfo[4] = 1;
+    toolinfo[4] = 0xc0201;       /* 12.2.1 — the host gates the sliding
+                                    FLAG on a real tools version (proven
+                                    with actprobe: ver=1 never fires it) */
     toolinfo[6] = 0x3041a28f;
     ((unsigned char *)toolinfo)[0x1c] = 9;
 
@@ -113,15 +133,147 @@ prlm_tis_register(PrlMousePriv p)
     return otg_request(&p->link, b, pos, 0, &actual);
 }
 
+/* real guest cursor: Adwaita left_ptr (Xcursor file), 32x32 ARGB —
+ * a hand-rolled bitmap rendered garbled on the client; the genuine
+ * image is what X itself displays */
+static const unsigned prlm_arrow32[32*32] = {
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x02ffffffu,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x01000000u,0x0b2e2e2eu,0x00000000u,0x03aaaaaau,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x03aaaaaau,0x00000000u,0x9bebebebu,0x49b9b9b9u,0x00000000u,0x05ccccccu,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x06aaaaaau,0x00000000u,0xbbf8f8f8u,0xf4f7f7f7u,0x38a3a3a3u,0x00000000u,
+    0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x06aaaaaau,0x06000000u,0xb4ebebebu,0xffffffffu,0xedfbfbfbu,0x3d9e9e9eu,
+    0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0b000000u,0xbbfdfdfdu,0xfebfbfbfu,0xffaaaaaau,0xeeffffffu,
+    0x3d9a9a9au,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0c000000u,0xbcffffffu,0xffb5b5b5u,0xf9000000u,0xffbfbfbfu,
+    0xeeffffffu,0x3d9a9a9au,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbdbdbdu,0xfc000000u,0xfc060606u,
+    0xffbcbcbcu,0xeeffffffu,0x3d9a9a9au,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc010101u,0xff020202u,
+    0xfc050505u,0xffbcbcbcu,0xeeffffffu,0x3d9a9a9au,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff060606u,
+    0xff000000u,0xfc050505u,0xffbcbcbcu,0xeeffffffu,0x3d9a9a9au,0x00000000u,0x05ccccccu,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff020202u,0xff000000u,0xfc050505u,0xffbcbcbcu,0xeeffffffu,0x3d9a9a9au,0x00000000u,0x05ccccccu,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff000000u,0xff020202u,0xff000000u,0xfc050505u,0xffbcbcbcu,0xeeffffffu,0x3d9a9a9au,0x00000000u,
+    0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff000000u,0xff000000u,0xff020202u,0xff000000u,0xfc050505u,0xffbcbcbcu,0xeeffffffu,0x3d9a9a9au,
+    0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff000000u,0xff000000u,0xff000000u,0xff020202u,0xff000000u,0xfc050505u,0xffbcbcbcu,0xeeffffffu,
+    0x3d9a9a9au,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff000000u,0xff000000u,0xff000000u,0xff000000u,0xff020202u,0xff000000u,0xfc050505u,0xffbcbcbcu,
+    0xeeffffffu,0x3d9a9a9au,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff000000u,0xff000000u,0xff000000u,0xff000000u,0xff010101u,0xff060606u,0xff040404u,0xfc080808u,
+    0xffc0c0c0u,0xeeffffffu,0x3da3a3a3u,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff000000u,0xff000000u,0xff000000u,0xff000000u,0xff000000u,0xff000000u,0xfe000000u,0xfd000000u,
+    0xfa000000u,0xffa8a8a8u,0xecf6f6f6u,0x3a999999u,0x00000000u,0x03aaaaaau,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff040404u,
+    0xff010101u,0xff010101u,0xff030303u,0xff000000u,0xff575757u,0xffaaaaaau,0xffb0b0b0u,0xffbdbdbdu,
+    0xffb9b9b9u,0xffbfbfbfu,0xffffffffu,0xfaf7f7f7u,0x4ac0c0c0u,0x01ffffffu,0x02ffffffu,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc000000u,0xff050505u,
+    0xff000000u,0xff000000u,0xff030303u,0xff000000u,0xfe313131u,0xffffffffu,0xe5f9f9f9u,0xc9edededu,
+    0xcdebebebu,0xcce7e7e7u,0xc6d7d7d7u,0xc4e3e3e3u,0xa5d9d9d9u,0x14666666u,0x027f7f7fu,0x01000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbbbbbbu,0xfc010101u,0xff010101u,
+    0xfe060606u,0xfea9a9a9u,0xff2f2f2fu,0xff010101u,0xfd000000u,0xffb2b2b2u,0xd7e2e2e2u,0x4c000000u,
+    0x4a000000u,0x46000000u,0x41000000u,0x31000000u,0x1a000000u,0x0e000000u,0x03000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfdfdfdu,0xffbebebeu,0xfc000000u,0xfe080808u,
+    0xffbababau,0xffffffffu,0xfe8e8e8eu,0xff000000u,0xff010101u,0xfd363636u,0xffffffffu,0x70888888u,
+    0x221e1e1eu,0x2a2a2a2au,0x261a1a1au,0x221e1e1eu,0x17161616u,0x08000000u,0x02000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcffffffu,0xffb5b5b5u,0xfa000000u,0xffc2c2c2u,
+    0xeef8f8f8u,0xc5b5b5b5u,0xfff5f5f5u,0xfe161616u,0xff010101u,0xfc000000u,0xffcbcbcbu,0xc2f1f1f1u,
+    0x0d000000u,0x0c2a2a2au,0x08000000u,0x07000000u,0x05000000u,0x02000000u,0x01000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xbcfafafau,0xfebfbfbfu,0xffabababu,0xf5fdfdfdu,
+    0x7a494949u,0x5f000000u,0xf2ffffffu,0xfe828282u,0xfe000000u,0xff010101u,0xfe4c4c4cu,0xfdffffffu,
+    0x46868686u,0x00010101u,0x047f7f7fu,0x01000000u,0x01000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0d000000u,0xb9e4e4e4u,0xffffffffu,0xf2f8f8f8u,0x775a5a5au,
+    0x3c000000u,0x37040404u,0xadbfbfbfu,0xfff1f1f1u,0xfc0a0a0au,0xff000000u,0xfc020202u,0xffdededeu,
+    0xadebebebu,0x01000000u,0x04bfbfbfu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x07919191u,0x0a000000u,0xc2efefefu,0xf9f4f4f4u,0x71555555u,0x31000000u,
+    0x25222222u,0x1e000000u,0x5a383838u,0xf8ffffffu,0xfe6a6a6au,0xfe000000u,0xfe000000u,0xfe636363u,
+    0xf8ffffffu,0x34666666u,0x00000000u,0x02ffffffu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x06555555u,0x0c000000u,0xabd5d5d5u,0x7b747474u,0x2b000000u,0x1f202020u,
+    0x0c000000u,0x14333333u,0x27000000u,0xbbd3d3d3u,0xffe3e3e3u,0xfc030303u,0xff020202u,0xfc090909u,
+    0xffebebebu,0x96e2e2e2u,0x00000000u,0x05ccccccu,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x03000000u,0x11000000u,0x320f0f0fu,0x28000000u,0x1b121212u,0x09000000u,
+    0x04000000u,0x0a333333u,0x180a0a0au,0x66555555u,0xfdffffffu,0xfd4f4f4fu,0xff000000u,0xfd000000u,
+    0xfe9b9b9bu,0xcdfdfdfdu,0x0c000000u,0x04bfbfbfu,0x01000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x02000000u,0x09000000u,0x12000000u,0x131a1a1au,0x08000000u,0x02000000u,
+    0x01000000u,0x03000000u,0x122a2a2au,0x2b000000u,0xcbdededeu,0xffdfdfdfu,0xfa0f0f0fu,0xf9101010u,
+    0xffddddddu,0xb8e4e4e4u,0x0d000000u,0x06aaaaaau,0x01000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x01000000u,0x02000000u,0x05333333u,0x04000000u,0x02000000u,0x01000000u,
+    0x00000000u,0x02000000u,0x0a333333u,0x1b121212u,0x61545454u,0xedf1f1f1u,0xfff7f7f7u,0xfff7f7f7u,
+    0xedf1f1f1u,0x595b5b5bu,0x100f0f0fu,0x05333333u,0x01000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x01000000u,0x01000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x01000000u,0x04000000u,0x120e0e0eu,0x2a000000u,0x602a2a2au,0x9f9e9e9eu,0x9f9e9e9eu,
+    0x5e2b2b2bu,0x28000000u,0x100f0f0fu,0x02000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x01000000u,0x06000000u,0x170b0b0bu,0x2a000000u,0x33000000u,0x33000000u,
+    0x2a000000u,0x170b0b0bu,0x06000000u,0x01000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x02000000u,0x07000000u,0x100f0f0fu,0x19282828u,0x19282828u,
+    0x100f0f0fu,0x07000000u,0x02000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+    0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,0x00000000u,
+};
+#define PRLM_ARROW_HSX 4
+#define PRLM_ARROW_HSY 1
+
 static int
-prlm_sliding_enable(PrlMousePriv p)
+prlm_session_up(PrlMousePriv p)
 {
     unsigned *r;
 
-    if (otg_open(&p->link))
-        return -1;
-    if (prlm_tis_register(p))
-        return -2;
     if (prlm_otg_req(p, 1))          /* attach */
         return -3;
     /* the ATTACH reply carries sm_ver at +0x14 (LAB_1000d7c2b);
@@ -129,11 +281,15 @@ prlm_sliding_enable(PrlMousePriv p)
     {
         unsigned smv = ((unsigned *)p->evbuf)[5];
 
-        if (prlm_otg_req(p, 7))      /* abs-flag on (the original's
-                                        'version query' is really this) */
+        if (prlm_otg_req(p, 7))      /* abs delivery: also powers the
+                                        cmd-2 poll (position+dims die
+                                        without it) */
             return -4;
         r = (unsigned *)p->evbuf;
-        p->batch = (int)smv != 0;
+        /* cmd-8 batch queue is dead on this host (its event page needs
+         * the cmd-9 mapping modern tools set up); skip the extra otg
+         * round trip per tick — cmd-2 poll carries everything */
+        p->batch = 0;
         p->sliding_on = 1;
         xf86Msg(X_INFO, PRLM_NAME ": sm_ver=%u batch=%d\n", smv,
                 p->batch);
@@ -163,18 +319,68 @@ prlm_sliding_enable(PrlMousePriv p)
             *(unsigned *)(lb + 0x1c) = p->scr_h;     /* y2 */
             *(unsigned *)(lb + 0x20) = 32;           /* cursor w */
             *(unsigned *)(lb + 0x24) = 32;           /* cursor h */
-            /* 32x32 transparent ARGB cursor at +0x28 (all zeros) */
+            /* transparent placeholder: the host drops this into the
+             * (unmapped) console page anyway; the REAL cursor flows via
+             * prlvideo's LoadCursorARGB -> 0x8100 -> client render —
+             * shipping our own bitmap here only ever produced a garbled
+             * or doubled pointer */
             if (otg_request(&p->link, lb, 0x28 + 32 * 32 * 4, 0x10, &actual))
                 return -6;
         }
 
+        /* console activation re-check: the host's activation check only
+         * runs on a 0x8100 cursor-show.  prlvideo's one-shot ran BEFORE
+         * this layout landed (dims were 0 then) — without this extra
+         * shot the console stays attached-but-inactive and the host
+         * routes input nowhere: keyboard AND mouse die.
+         * The image is a transparent placeholder: the real guest cursor
+         * arrives later through prlvideo's cursor plane. */
+        {
+            unsigned char m[64 + 32 * 32 * 4] __attribute__((aligned(8)));
+            unsigned *inl = (unsigned *)(m + 16);
+            struct { unsigned Request, Status; unsigned short InlineByteCount,
+                     BufferCount; unsigned Reserved; } *req =
+                (void *)m;
+            struct { void *buf; unsigned ByteCount; unsigned Writable:1,
+                     Userspace:1, Reserved:30; } *b =
+                (void *)(m + 16 + 32);        /* INLINE_SIZE pads 28->32 */
+            void *ptr = m;
+            int fd = open("/proc/driver/prl_vtg", O_WRONLY);
+
+            memcpy(m + 64, prlm_arrow32, sizeof(prlm_arrow32));
+            req->Request = 0x8100;
+            req->Status = 0xffffffff;
+            req->InlineByteCount = 0x1c;
+            req->BufferCount = 1;
+            inl[0] = p->scr_w / 2;
+            inl[1] = p->scr_h / 2;
+            inl[2] = PRLM_ARROW_HSX; inl[3] = PRLM_ARROW_HSY;
+            inl[4] = 32; inl[5] = 32; inl[6] = 32 * 4;
+            b[0].buf = m + 64;         /* real Adwaita arrow */
+            b[0].ByteCount = 32 * 32 * 4;
+            b[0].Writable = 1;
+            if (fd < 0 || write(fd, &ptr, sizeof(ptr)) < 0)
+                xf86Msg(X_WARNING, PRLM_NAME ": activation 0x8100 failed"
+                        " (fd=%d %s)\n", fd, strerror(errno));
+            else
+                xf86Msg(X_INFO, PRLM_NAME ": console activation 0x8100 "
+                        "st=0x%x\n", req->Status);
+            if (fd >= 0)
+                close(fd);
+        }
     }
     return 0;
 }
 
-/* batch fetch: 44-byte event records {flags,_,_,buttons,X,Y,Z,W,_,w,h}
- * flags bit0 = absolute; this is the tablet-queue reader — without it
- * the host's absolute delivery has no consumer and input dies */
+static int
+prlm_sliding_enable(PrlMousePriv p)
+{
+    if (otg_open(&p->link))
+        return -1;
+    if (prlm_tis_register(p))
+        return -2;
+    return prlm_session_up(p);
+}
 static int
 prlm_sliding_fetch(PrlMousePriv p, InputInfoPtr pInfo)
 {
@@ -250,13 +456,16 @@ prlm_sliding_poll(PrlMousePriv p)
         return -1;
     if (prlm_otg_req(p, 2))
         return -2;
+    /* reply body (verified live against Mac-cursor moves, poll2 probe):
+     * +0x12=X +0x14=Y +0x16=W(1920) +0x18=H(1200) +0x1a=Z; X/Y are in
+     * GUEST screen coordinates and track the host cursor in realtime */
     q = (unsigned short *)(p->evbuf + 0x0c);
     p->code = q[0];
-    p->abs_x = q[1];
-    p->abs_y = q[2];
-    p->dim_w = q[3];
-    p->dim_h = q[4];
-    p->z = q[5];
+    p->abs_x = q[3];
+    p->abs_y = q[4];
+    p->dim_w = q[5];
+    p->dim_h = q[6];
+    p->z = q[7];
     if (!p->logged && p->dim_w > 1) {
         p->logged = 1;
         xf86Msg(X_INFO, PRLM_NAME ": host sliding ACTIVE dims=%ux%u\n",
@@ -307,6 +516,108 @@ _X_EXPORT XF86ModuleData prlmouseModuleData = {
 
 /* poll OTG on a timer: when the host stops PS/2 injection (display
  * session active), evdev never fires and absolute events would starve */
+/* thread-side: cmd-2 poll -> anchor/live update + watchdogs.  NO X
+ * calls and NO posting here; read_input consumes the shared fields. */
+static void
+prlm_poll_update(PrlMousePriv p)
+{
+    int prc;
+    CARD32 now = GetTimeInMillis();
+    int dims_ok, poll_moved = 0;
+
+    prc = prlm_sliding_poll(p);   /* uses thread-private evbuf */
+
+    pthread_mutex_lock(&p->state_lock);
+    dims_ok = p->dim_w > 1 && p->dim_h > 1;
+    if (prc == 0 && dims_ok) {
+        int x = p->abs_x, y = p->abs_y;
+
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (x >= (int)p->dim_w) x = p->dim_w - 1;
+        if (y >= (int)p->dim_h) y = p->dim_h - 1;
+        if (x != p->anchor_x || y != p->anchor_y) {
+            p->anchor_x = x;
+            p->anchor_y = y;
+            p->acc_dx = p->acc_dy = 0;
+            p->last_poll_change = now;
+            p->poll_live = 1;
+            poll_moved = 1;
+        } else if (p->last_poll_change &&
+                   now - p->last_poll_change > 150) {
+            /* frozen poll = cursor left the VM window: park */
+            p->poll_live = 0;
+        }
+    }
+    pthread_mutex_unlock(&p->state_lock);
+
+    /* ---- watchdogs (thread side, fuse-capped) ---- */
+    if (p->bounce_count >= 10)
+        return;
+
+    if (prc == 0 && dims_ok && !poll_moved && p->last_poll_change &&
+        now - p->last_poll_change > 500 &&
+        p->last_delta_ms && now - p->last_delta_ms < 300 &&
+        now - p->last_bounce_ms > 5000) {
+        /* stuck fallback: poll frozen while PS/2 motion flows */
+        p->bounce_count++;
+        p->last_bounce_ms = now;
+        prlm_otg_req(p, 0);          /* release: clears stale state */
+        p->sliding_on = 0;
+        if (prlm_session_up(p) == 0) {
+            snprintf(p->note, sizeof(p->note),
+                     "auto-bounce: client was stuck in relative (#%d)",
+                     p->bounce_count);
+            p->note_pending = 1;
+        }
+    } else if (prc != 0 || !dims_ok) {
+        /* console dead: attached but no dims */
+        if (!p->last_bounce_ms)
+            p->last_bounce_ms = now;
+        else if (now - p->last_bounce_ms > 5000) {
+            p->bounce_count++;
+            p->last_bounce_ms = now;
+            prlm_otg_req(p, 0);      /* release: clears stale state */
+            p->sliding_on = 0;
+            if (prlm_session_up(p) == 0) {
+                snprintf(p->note, sizeof(p->note),
+                         "auto-bounce: console dead, no dims (#%d)",
+                         p->bounce_count);
+                p->note_pending = 1;
+            }
+        }
+    }
+}
+
+/* poll worker: owns the otg link and the session lifecycle */
+static void *
+prlm_poll_thread(void *arg)
+{
+    PrlMousePriv p = arg;
+    sigset_t set;
+    int rc;
+
+    sigfillset(&set);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
+    if (otg_open(&p->link) == 0 && prlm_tis_register(p) == 0)
+        rc = prlm_session_up(p);
+    else
+        rc = -100;
+    snprintf(p->note, sizeof(p->note),
+             "sliding session %s (rc=%d batch=%d)",
+             rc == 0 ? "ENABLED" : "unavailable", rc, p->batch);
+    p->note_pending = 1;
+
+    while (p->thread_run) {
+        if (p->sliding_on)
+            prlm_poll_update(p);
+        usleep(10000);            /* 100Hz cadence */
+    }
+    prlm_otg_req(p, 0);           /* release on shutdown */
+    return NULL;
+}
+
 static CARD32
 prlm_wakeup_timer(OsTimerPtr timer, CARD32 now, pointer arg)
 {
@@ -314,37 +625,18 @@ prlm_wakeup_timer(OsTimerPtr timer, CARD32 now, pointer arg)
     PrlMousePriv p = (PrlMousePriv)pInfo->private;
 
     (void)timer; (void)now;
-    if (p && p->sliding_on && !p->evdev_active) {
-        /* batch fetch is the tablet-queue reader; it must run even
-         * when evdev is silent. Main-thread OTG was believed to stall,
-         * but the timer runs in the dispatch loop between requests —
-         * and without this reader the host's absolute delivery dies */
-        int prc = p->batch ? prlm_sliding_fetch(p, pInfo) : 0;
-
-        if (p && p->logged < 6) {
-            p->logged++;
-            xf86Msg(X_INFO, PRLM_NAME ": poll#%d rc=%d c=%u abs=%u,%u dims=%ux%u Z=%d cell=%u,%u\n",
-                    p->logged, prc, p->code, p->abs_x, p->abs_y,
-                    p->dim_w, p->dim_h, p->z, p->cell[0], p->cell[1]);
-        }
-        if (prc == 0 && p->dim_w > 1 && p->dim_h > 1) {
-            int x = p->abs_x, y = p->abs_y;
-            ScreenPtr scr = miPointerGetScreen(pInfo->dev);
-
-            if (scr) {
-                x -= scr->x;
-                y -= scr->y;
-            }
-            if (x < 0) x = 0;
-            if (y < 0) y = 0;
-            if (x >= (int)p->dim_w) x = p->dim_w - 1;
-            if (y >= (int)p->dim_h) y = p->dim_h - 1;
-            xf86PostMotionEvent(pInfo->dev, TRUE, 0, 2, x, y);
-        }
+    /* main thread does ZERO otg: the poll worker owns all toolgate
+     * traffic (a cold consumer blocks writes forever -> X would hang,
+     * e.g. at session logout).  Here we only drain thread notes. */
+    if (p && p->note_pending) {
+        pthread_mutex_lock(&p->state_lock);
+        p->note_pending = 0;
+        xf86Msg(X_INFO, PRLM_NAME ": %s\n", p->note);
+        pthread_mutex_unlock(&p->state_lock);
     }
     if (p)
         p->evdev_active = FALSE;   /* read_input re-sets it */
-    return 20;                     /* 20ms rearm */
+    return 200;
 }
 
 static int
@@ -369,29 +661,38 @@ prlm_device_on(InputInfoPtr pInfo)
             prl_share_state_enabled()) {
             PrlMousePriv pp = (PrlMousePriv)pInfo->private;
             ScrnInfoPtr pScrn = xf86Screens[0];
-            int rc;
 
             pp->scr_w = (unsigned)pScrn->virtualX;
             pp->scr_h = (unsigned)pScrn->virtualY;
-            rc = prlm_sliding_enable(pp);
-
-            xf86Msg(X_INFO, "%s: sliding session %s (rc=%d batch=%d)\n",
-                    PRLM_NAME, rc == 0 ? "ENABLED" : "unavailable",
-                    rc, rc == 0 ? pp->batch : 0);
+            pthread_mutex_init(&pp->state_lock, NULL);
+            pp->thread_run = 1;
+            if (pthread_create(&pp->poll_thread, NULL,
+                               prlm_poll_thread, pp) == 0) {
+                xf86Msg(X_INFO, "%s: poll worker started\n", PRLM_NAME);
+            } else {
+                xf86Msg(X_WARNING, "%s: poll worker create failed\n",
+                        PRLM_NAME);
+            }
         } else {
             xf86Msg(X_INFO, "%s: sliding session OFF (ShareState disabled)\n",
                     PRLM_NAME);
         }
     }
     xf86AddEnabledDevice(pInfo);
-    TimerSet(NULL, 0, 20, prlm_wakeup_timer, pInfo);
+    TimerSet(NULL, 0, 10, prlm_wakeup_timer, pInfo);
     return Success;
 }
 
 static void
 prlm_device_off(InputInfoPtr pInfo)
 {
+    PrlMousePriv p = (PrlMousePriv)pInfo->private;
+
     xf86RemoveEnabledDevice(pInfo);
+    if (p && p->thread_run) {
+        p->thread_run = 0;
+        pthread_join(p->poll_thread, NULL);
+    }
     if (pInfo->fd >= 0) {
         close(pInfo->fd);
         pInfo->fd = -1;
@@ -449,6 +750,43 @@ prlm_read_input(InputInfoPtr pInfo)
                                         value != 0, 0, 0);
             }
         }
+        /* hybrid: the cmd-2 poll anchors absolute position but only
+         * updates at ~10Hz (the client's feed rate); the PS/2 delta
+         * stream carries the same motion at full rate.  Apply deltas
+         * on top of the anchor while the poll is live; when it freezes
+         * (cursor outside the VM window) park the pointer.  Sliding
+         * off / poll dead -> plain relative fallback. */
+        {
+            int post_x = -1, post_y = -1;
+
+            pthread_mutex_lock(&p->state_lock);
+            if (p->sliding_on && p->dim_w > 1 && p->dim_h > 1) {
+                if (dx || dy)
+                    p->last_delta_ms = GetTimeInMillis();
+                if (p->poll_live && (dx || dy)) {
+                    int x, y;
+
+                    p->acc_dx += dx;
+                    p->acc_dy += dy;
+                    x = p->anchor_x + p->acc_dx;
+                    y = p->anchor_y + p->acc_dy;
+                    if (x < 0) x = 0;
+                    if (y < 0) y = 0;
+                    if (x >= (int)p->dim_w) x = p->dim_w - 1;
+                    if (y >= (int)p->dim_h) y = p->dim_h - 1;
+                    post_x = x;
+                    post_y = y;
+                }
+                dx = dy = 0;
+            }
+            pthread_mutex_unlock(&p->state_lock);
+            if (post_x >= 0) {
+                xf86PostMotionEvent(pInfo->dev, TRUE, 0, 2,
+                                    post_x, post_y);
+                if (prl_share_mouse_position)
+                    prl_share_mouse_position(post_x, post_y);
+            }
+        }
         if (dx || dy) {
             xf86PostMotionEvent(pInfo->dev, FALSE, 0, 2, dx, dy);
             if (prl_share_mouse_position) {
@@ -463,23 +801,7 @@ prlm_read_input(InputInfoPtr pInfo)
             xf86PostMotionEvent(pInfo->dev, FALSE, 3, 1, dw);
     }
 
-    if (p && p->batch)
-        prlm_sliding_fetch(p, pInfo);
-    if (p && !p->batch && p->sliding_on && prlm_sliding_poll(p) == 0 &&
-        p->dim_w > 1 && p->dim_h > 1) {
-        int x = p->abs_x, y = p->abs_y;
-        ScreenPtr scr = miPointerGetScreen(pInfo->dev);
-
-        if (scr) {                    /* desktop-global -> screen-local */
-            x -= scr->x;
-            y -= scr->y;
-        }
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
-        if (x >= (int)p->dim_w) x = p->dim_w - 1;
-        if (y >= (int)p->dim_h) y = p->dim_h - 1;
-        xf86PostMotionEvent(pInfo->dev, TRUE, 0, 2, x, y);
-    }
+    /* NO polling here — the wakeup timer owns the 10ms cadence */
 }
 
 static void

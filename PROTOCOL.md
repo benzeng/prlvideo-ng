@@ -1074,3 +1074,67 @@ call FUN_100430270   ; esi = bitmask(bit0=1) ← 值正确！
 3. FUN_10035ac20 setupSignals → 信号连接时机
 4. FUN_100361a60 param_1+0x10 → mouse_type 初始值
 Ghidra 反编译（decomp_client/）已有全部代码做参照。
+
+# 🏆 无缝鼠标穿越——完整协议（2026-10-10 收官，全流程验收通过）
+
+## 总架构（五层，缺一不可）
+
+```
+Mac 光标 ──绝对位置──> prl_client_app(AbsoluteMouse模式)
+   │ FLAG(0x1895e) 链: guest TIS 版本=0xc0201 → attach+cmd7 → 宿主广播
+   ▼
+prl_vm_app 控制台(OTG service 1) ──cmd2 轮询(~10Hz 位置快照)──> prlmouse worker
+   │                                              + PS/2 相对增量(全速率)
+   ▼ 混合定位: PS/2 增量 + cmd2 锚定(变更时重锚) + 冻结150ms=出窗停走
+Xorg 绝对事件 → 硬光标钩子 → 位置经 0x8117 buffer1 → 宿主合成层(60Hz,零往返)
+```
+
+## 1. FLAG 链路（客户端切换 AbsoluteMouse 的扳机）
+- prlmouse TIS 注册 `parallels.SlidingMouse.guest.lin`，**版本字段必须 0xc0201**（写 1 宿主不认，FLAG 永不发）
+- attach(cmd1) → cmd7 → cmd4 布局 → 0x8100 激活 → 宿主广播 PET 0x1895e
+- 客户端 onSlidingMouseStatusChanged → updateMouseType → 切 AbsoluteMouse
+- **调试金钥匙**：`prlsrvctl set --verbose-log on`（实时生效），grep
+  "sliding mouse state change"/"Switching mouse type"（/Library/Logs/parallels.log）
+
+## 2. 控制台激活时序（键鼠全死的坑）
+- 宿主激活检查**只在 0x8100 时运行**；检查时若布局(cmd4)未到 → dims=0 →
+  "已附着未激活" → 输入路由进黑洞 → 键鼠全死
+- prlvideo 的 0x8100 在 ScreenInit 跑（早于 prlmouse 的 cmd4 260ms）
+  → **prlmouse 必须在 cmd4 后补发自己的 0x8100**（st=0 = 激活成功）
+
+## 3. 混合定位（跳变的根治）
+- cmd2 轮询：位置快照，但**客户端只 ~10Hz 喂**（单独用=跳）
+- PS/2 相对流：宿主恒定注入，全速率（单独用=不能穿越）
+- 合成：poll 变更→重锚+清累计增量；PS/2 增量叠加在全速锚点上；
+  poll 冻结>150ms（光标出窗）→ 增量停用（穿越保护）
+- 回复字段（evbuf 相对偏移）：+0x12=X +0x14=Y +0x16=W +0x18=H +0x1a=Z
+
+## 4. 光标显示（双箭头/乱码/消失的根治）
+- **X 硬光标路径**（UseHWCursor=TRUE）：位置→0x8117 buffer1，图像→0x8100
+  宿主以显示刷新率合成，帧缓冲里无光标（零脏区零往返=丝滑）
+- **客户端在 FLAG 时刻快照会话 0x8100 的图像**并绘制：必须携带真实
+  Adwaita left_ptr 32x32 ARGB（从 Xcursor 文件提取，含热点 4,1）；
+  手绘位图=乱码，透明占位=光标消失
+- **所有光标必须 32x32 ARGB 画布**（ARGB 与 mono 两路统一）：紧凑 24x24
+  或 type=1+64x64 会被解读错位=并排双箭头+杂尾
+- 打字光标消失 = macOS 行为（客户端绘制层跟随），出窗再入恢复
+
+## 5. 宿主侧生存法则（楔死/黑屏/洪水的三大死因）
+- **kicker 必须保留**：toolgate 写只在"新请求到达"时完成，无 60Hz
+  kicker 则首写永久阻塞=黑屏（fd 轮换救不了：单线程首写无解）
+- **冷启动禁 cmd0**：新鲜控制台上先 release 会让状态机走歪，之后
+  attach 永远活不过 5 秒（弹跳恢复路径里才用 cmd0）
+- **share 循环限速 16ms**：合成器=全屏脏区×60fps，1ms 节奏=宿主
+  146% 过载→控制台饿死→全系统冻（菜单/弹窗一开就死的根因）
+- 帧泵(pump)服务**永久禁用**：第四路 vtg 写入者与一切互踩
+
+## 6. 工程结构（防挂起）
+- prlmouse：**全部 otg 在 worker 线程**（会话/轮询/watchdog/注销release），
+  X 主线程零 toolgate 调用（消费者遇冷=写永久阻塞=主线程冻结）
+- 自愈双探测器+熔断：poll 冻结500ms+PS/2 在流=客户端掉relative→弹跳；
+  无 dims=控制台死→弹跳；共 10 次上限（防风暴）；prl-bounce 手动兜底
+- prlvideo：share 线程+kicker 线程（各持独立 fd）+1Hz 全帧心跳保活
+
+## 遗留小项（不影响使用）
+- 光标形态不随 guest 内容实时变（客户端只快照 FLAG 时刻图像）
+- cmd8 批取队列恒空（需 cmd9 映射，现代 Tools 路径）——cmd2 轮询已替代
